@@ -32,10 +32,24 @@ def test_create_maton_md_contains_name(tmp_path: Path) -> None:
 
 
 def test_create_maton_md_contains_created_timestamp(tmp_path: Path) -> None:
-    """Maton.md contains a Created: line with an ISO 8601 timestamp."""
+    """Maton.md contains a Created section with an ISO 8601 timestamp."""
     create_maton("MyAgent", base_dir=tmp_path)
     content = (tmp_path / "MyAgent" / "Maton.md").read_text()
-    assert "**Created**:" in content
+    assert "## Created" in content
+
+
+def test_create_maton_md_contains_what_i_am_section(tmp_path: Path) -> None:
+    """Maton.md contains a 'What I Am' section."""
+    create_maton("MyAgent", base_dir=tmp_path)
+    content = (tmp_path / "MyAgent" / "Maton.md").read_text()
+    assert "## What I Am" in content
+
+
+def test_create_maton_md_contains_tasks_section(tmp_path: Path) -> None:
+    """Maton.md contains a 'Tasks' section."""
+    create_maton("MyAgent", base_dir=tmp_path)
+    content = (tmp_path / "MyAgent" / "Maton.md").read_text()
+    assert "## Tasks" in content
 
 
 def test_create_maton_initializes_git_repo(tmp_path: Path) -> None:

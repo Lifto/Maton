@@ -27,7 +27,33 @@ def create_maton(name: str, base_dir: Path | None = None) -> Path:
 
     created_at = datetime.now(tz=UTC).isoformat()
     maton_md = maton_path / "Maton.md"
-    maton_md.write_text(f"# {name}\n\n**Created**: {created_at}\n")
+    maton_md.write_text(
+        f"""\
+# {name}
+
+## What I Am
+I am a maton — an autonomous unit whose state is this git repository.
+Every change to my state is a commit. My history is my git log.
+
+## Name
+{name}
+
+## Created
+{created_at}
+
+## State
+This directory is my state. What is committed is what I know and what I am.
+Working changes are in progress. Committed changes are truth.
+
+## Tasks
+None yet. Tasks live in subdirectories. A task is created when I am
+given work to do, and completed when its result is committed.
+
+## How to Interact With Me
+Read this file. If you are an LLM operating me, check for pending tasks
+and act on them. If there are none, wait for instructions.
+"""
+    )
 
     git = shutil.which("git") or "git"
     subprocess.run([git, "init"], cwd=maton_path, check=True, capture_output=True)  # noqa: S603
