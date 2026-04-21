@@ -17,3 +17,12 @@ def init(name: str = typer.Argument(..., help="Name of the new maton instance.")
     """Create a new maton instance as a git repository."""
     maton_path = create_maton(name)
     typer.echo(f"Created maton '{name}' at {maton_path}")
+
+
+@app.command()
+def ask(name: str, question: str) -> None:
+    """Ask a maton a question."""
+    from maton.ask import ask_maton
+
+    response = ask_maton(name, question)
+    print(response)
