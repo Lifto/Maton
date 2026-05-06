@@ -1,12 +1,13 @@
 """Ask a maton a question — reads its state and queries the LLM."""
 
+import os
 from pathlib import Path
 
 from openai import OpenAI
 
 DEFAULT_BASE_DIR = Path.home() / ".maton" / "matons"
-DEFAULT_ENDPOINT = "http://localhost:8080/v1"
-DEFAULT_MODEL = "gemma-4-31b-it-UD-MLX-4bit"
+DEFAULT_ENDPOINT = os.environ.get("MATON_ENDPOINT", "http://localhost:8080/v1")
+DEFAULT_MODEL = os.environ.get("MATON_MODEL", "gemma-4-31b-it-UD-MLX-4bit")
 
 
 def ask_maton(name: str, question: str, base_dir: Path | None = None) -> str:
