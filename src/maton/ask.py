@@ -24,10 +24,13 @@ def ask_maton(name: str, question: str, base_dir: Path | None = None) -> str:
         base_dir = DEFAULT_BASE_DIR
 
     maton_path = base_dir / name
-    maton_md = maton_path / "Maton.md"
-
-    if not maton_md.exists():
+    if not maton_path.is_dir():
         msg = f"No maton found at {maton_path}"
+        raise FileNotFoundError(msg)
+
+    maton_md = maton_path / "Maton.md"
+    if not maton_md.is_file():
+        msg = f"Maton.md not found in {maton_path}"
         raise FileNotFoundError(msg)
 
     state = maton_md.read_text()

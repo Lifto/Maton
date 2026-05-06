@@ -37,6 +37,15 @@ def test_ask_reads_maton_md_and_queries_llm(tmp_path: Path) -> None:
 
 
 def test_ask_raises_when_maton_not_found(tmp_path: Path) -> None:
-    """Test that ask raises FileNotFoundError for missing maton."""
+    """Test that ask raises FileNotFoundError when the maton directory is missing."""
     with pytest.raises(FileNotFoundError, match="No maton found"):
         ask_maton("nonexistent", "hello?", base_dir=tmp_path)
+
+
+def test_ask_raises_when_maton_md_missing(tmp_path: Path) -> None:
+    """Test that ask raises FileNotFoundError when directory exists but Maton.md is absent."""
+    maton_dir = tmp_path / "bare"
+    maton_dir.mkdir()
+
+    with pytest.raises(FileNotFoundError, match="Maton.md not found"):
+        ask_maton("bare", "hello?", base_dir=tmp_path)

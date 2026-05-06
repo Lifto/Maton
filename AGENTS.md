@@ -8,7 +8,7 @@ After any code change, verify that this file is still accurate. Update it in the
 
 ## Project Status
 
-Early stage — architecture and conventions being established. No runtime code yet.
+Early stage — CLI (`init`, `ask`), packaged `Maton.md` template, and tests are in place.
 
 ## Build & Run
 
@@ -37,8 +37,11 @@ Maton/
   README.md        # project overview
   task.md          # current design task
   src/
-    maton/         # package source (TBD)
-  tests/           # automated tests (TBD)
+    maton/              # package source
+      init.py           # `maton init`
+      ask.py            # `maton ask`
+      cli.py            # Typer entrypoint
+  tests/           # pytest
 ```
 
 ## Code Quality Enforcement

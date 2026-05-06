@@ -52,6 +52,14 @@ def test_create_maton_md_contains_tasks_section(tmp_path: Path) -> None:
     assert "## Tasks" in content
 
 
+def test_create_maton_md_includes_operational_protocol(tmp_path: Path) -> None:
+    """Packaged template merges instance bootstrap with operational protocol."""
+    create_maton("MyAgent", base_dir=tmp_path)
+    content = (tmp_path / "MyAgent" / "Maton.md").read_text()
+    assert "## Core Purpose" in content
+    assert "What should I pay attention to right now?" in content
+
+
 def test_create_maton_initializes_git_repo(tmp_path: Path) -> None:
     """create_maton initializes a git repository with one commit."""
     create_maton("TestMaton", base_dir=tmp_path)
