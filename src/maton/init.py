@@ -41,7 +41,7 @@ def create_maton(base_dir: Path | None = None) -> Path:
     (instance_path / "logs").mkdir(exist_ok=True)
 
     # Write .gitignore
-    (instance_path / ".gitignore").write_text("logs/\n__pycache__/\n")
+    (instance_path / ".gitignore").write_text("logs/\n__pycache__/\nrepos/\n")
 
     # Initialize git repo
     git = shutil.which("git") or "git"

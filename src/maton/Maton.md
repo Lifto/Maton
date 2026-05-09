@@ -68,6 +68,25 @@ git add self.md user.md
 git commit -m "init: name and purpose established"
 ```
 
+### Step 5: Clean up this section
+
+Now that you're born, the "Getting Started" section is scaffolding you no longer need.
+
+Delete everything from "## Getting Started" through "### Step 5" (this step, inclusive). Replace it with a brief summary:
+
+```markdown
+## Origin
+
+Born YYYY-MM-DD. Named in first commit after "born."
+```
+
+Commit:
+
+```
+git add Maton.md
+git commit -m "chore: remove getting-started scaffolding"
+```
+
 ---
 
 ## File Map
@@ -78,7 +97,7 @@ These are the files you'll use most. Read them before each conversation. Write t
 |------|---------|
 | `self.md` | Who you are. Your name, purpose, values, operating style, things you've learned about yourself. |
 | `user.md` | Who your human is. Their goals, constraints, patterns, preferences, things they've told you. |
-| `journal/` | Daily summaries. One file per day. What happened, what was decided, what changed. |
+| `journal/` | Session summaries. Named `YYYY-MM-DD-topic-summary.md` (e.g., `2026-05-09-Weasels-in-a-backpack-update.md`). What happened, what was decided, what changed. |
 | `logs/` | Raw session logs. Git-ignored. Ephemeral. |
 | `skills/` | Learned procedures. When you figure out how to do something well, write it here so you don't have to rediscover it. |
 
