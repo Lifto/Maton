@@ -1,82 +1,143 @@
 """Tests for maton init logic."""
 
+import inspect
+import re
+import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from maton.init import create_maton
 
 
-def test_create_maton_returns_correct_path(tmp_path: Path) -> None:
-    """create_maton returns the path to the new maton directory."""
-    result = create_maton("TestMaton", base_dir=tmp_path)
-    assert result == tmp_path / "TestMaton"
+def test_create_maton_returns_path_with_timestamp_format(tmp_path: Path) -> None:
+    """Return value name matches maton-YYYYMMDD-HHMMSS format."""
+    result = create_maton(base_dir=tmp_path)
+    assert re.match(r"maton-\d{8}-\d{6}$", result.name)
 
 
 def test_create_maton_creates_directory(tmp_path: Path) -> None:
-    """create_maton creates the maton directory on disk."""
-    create_maton("TestMaton", base_dir=tmp_path)
-    assert (tmp_path / "TestMaton").is_dir()
+    """create_maton creates the instance directory on disk."""
+    result = create_maton(base_dir=tmp_path)
+    assert result.is_dir()
 
 
-def test_create_maton_writes_maton_md(tmp_path: Path) -> None:
-    """create_maton creates a Maton.md file in the maton directory."""
-    create_maton("TestMaton", base_dir=tmp_path)
-    assert (tmp_path / "TestMaton" / "Maton.md").is_file()
+def test_create_maton_copies_maton_md(tmp_path: Path) -> None:
+    """Maton.md is present in the instance."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "Maton.md").is_file()
 
 
-def test_create_maton_md_contains_name(tmp_path: Path) -> None:
-    """Maton.md contains the maton name as an H1 heading."""
-    create_maton("MyAgent", base_dir=tmp_path)
-    content = (tmp_path / "MyAgent" / "Maton.md").read_text()
-    assert "# MyAgent" in content
+def test_create_maton_copies_agents_md(tmp_path: Path) -> None:
+    """AGENTS.md is present in the instance."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "AGENTS.md").is_file()
 
 
-def test_create_maton_md_contains_created_timestamp(tmp_path: Path) -> None:
-    """Maton.md contains a Created section with an ISO 8601 timestamp."""
-    create_maton("MyAgent", base_dir=tmp_path)
-    content = (tmp_path / "MyAgent" / "Maton.md").read_text()
-    assert "## Created" in content
+def test_create_maton_copies_self_md(tmp_path: Path) -> None:
+    """self.md is present in the instance."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "self.md").is_file()
 
 
-def test_create_maton_md_contains_what_i_am_section(tmp_path: Path) -> None:
-    """Maton.md contains a 'What I Am' section."""
-    create_maton("MyAgent", base_dir=tmp_path)
-    content = (tmp_path / "MyAgent" / "Maton.md").read_text()
-    assert "## What I Am" in content
+def test_create_maton_copies_user_md(tmp_path: Path) -> None:
+    """user.md is present in the instance."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "user.md").is_file()
 
 
-def test_create_maton_md_contains_tasks_section(tmp_path: Path) -> None:
-    """Maton.md contains a 'Tasks' section."""
-    create_maton("MyAgent", base_dir=tmp_path)
-    content = (tmp_path / "MyAgent" / "Maton.md").read_text()
-    assert "## Tasks" in content
+def test_create_maton_copies_update_skill(tmp_path: Path) -> None:
+    """skills/update.md is present in the instance."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "skills" / "update.md").is_file()
 
 
-def test_create_maton_md_includes_operational_protocol(tmp_path: Path) -> None:
-    """Packaged template merges instance bootstrap with operational protocol."""
-    create_maton("MyAgent", base_dir=tmp_path)
-    content = (tmp_path / "MyAgent" / "Maton.md").read_text()
-    assert "## Core Purpose" in content
-    assert "What should I pay attention to right now?" in content
+def test_create_maton_copies_python_files(tmp_path: Path) -> None:
+    """init.py, cli.py, ask.py, and __init__.py are all present in the instance."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "init.py").is_file()
+    assert (result / "cli.py").is_file()
+    assert (result / "ask.py").is_file()
+    assert (result / "__init__.py").is_file()
+
+
+def test_create_maton_creates_gitignore(tmp_path: Path) -> None:
+    """.gitignore is present and contains logs/ and __pycache__/."""
+    result = create_maton(base_dir=tmp_path)
+    gitignore = result / ".gitignore"
+    assert gitignore.is_file()
+    content = gitignore.read_text()
+    assert "logs/" in content
+    assert "__pycache__/" in content
+
+
+def test_create_maton_creates_journal_dir(tmp_path: Path) -> None:
+    """journal/ directory exists and contains .gitkeep."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "journal").is_dir()
+    assert (result / "journal" / ".gitkeep").is_file()
+
+
+def test_create_maton_creates_logs_dir(tmp_path: Path) -> None:
+    """logs/ directory exists in the instance."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "logs").is_dir()
 
 
 def test_create_maton_initializes_git_repo(tmp_path: Path) -> None:
-    """create_maton initializes a git repository with one commit."""
-    create_maton("TestMaton", base_dir=tmp_path)
-    result = subprocess.run(  # noqa: S603
-        ["git", "log", "--oneline"],  # noqa: S607
-        cwd=tmp_path / "TestMaton",
+    """.git/ exists, there is exactly 1 commit, and the commit message is 'born'."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / ".git").is_dir()
+    git = shutil.which("git") or "git"
+    log = subprocess.run(  # noqa: S603
+        [git, "log", "--oneline"],
         capture_output=True,
         text=True,
-        check=True,
+        cwd=result,
     )
-    lines = result.stdout.strip().splitlines()
+    lines = log.stdout.strip().splitlines()
     assert len(lines) == 1
     assert "born" in lines[0]
 
 
+def test_create_maton_logs_not_tracked(tmp_path: Path) -> None:
+    """logs/ directory is not tracked by git."""
+    result = create_maton(base_dir=tmp_path)
+    git = shutil.which("git") or "git"
+    tracked = subprocess.run(  # noqa: S603
+        [git, "ls-files"],
+        capture_output=True,
+        text=True,
+        cwd=result,
+    )
+    assert "logs/" not in tracked.stdout
+
+
+def test_create_maton_excludes_pycache(tmp_path: Path) -> None:
+    """No __pycache__ directory is present in the instance."""
+    result = create_maton(base_dir=tmp_path)
+    pycache_dirs = list(result.rglob("__pycache__"))
+    assert pycache_dirs == []
+
+
 def test_create_maton_creates_parent_dirs(tmp_path: Path) -> None:
-    """create_maton creates parent directories if they don't exist."""
+    """create_maton works when base_dir is a nested path that doesn't exist yet."""
     nested_base = tmp_path / "deep" / "nested" / "path"
-    create_maton("TestMaton", base_dir=nested_base)
-    assert (nested_base / "TestMaton").is_dir()
+    result = create_maton(base_dir=nested_base)
+    assert result.is_dir()
+
+
+def test_create_maton_two_calls_distinct(tmp_path: Path) -> None:
+    """Two calls produce two different directories with different names."""
+    first = create_maton(base_dir=tmp_path)
+    time.sleep(1)
+    second = create_maton(base_dir=tmp_path)
+    assert first != second
+    assert first.is_dir()
+    assert second.is_dir()
+
+
+def test_create_maton_no_name_parameter(tmp_path: Path) -> None:
+    """create_maton signature has no 'name' parameter."""
+    sig = inspect.signature(create_maton)
+    assert "name" not in sig.parameters

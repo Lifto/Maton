@@ -15,7 +15,7 @@ Early stage — CLI (`init`, `ask`), packaged `Maton.md` template, and tests are
 ```bash
 uv sync                  # install deps
 uv run pytest            # run tests
-uv run maton init <name> # create a new maton instance
+uv run maton init        # create a new maton instance
 ```
 
 ## Running Tests
@@ -38,9 +38,16 @@ Maton/
   task.md          # current design task
   src/
     maton/              # package source
-      init.py           # `maton init`
+      __init__.py
+      AGENTS.md         # instance LLM bootstrap (copied to each instance)
+      Maton.md          # getting-started guide (copied to each instance)
       ask.py            # `maton ask`
       cli.py            # Typer entrypoint
+      init.py           # `maton init`
+      self.md           # identity seed (copied to each instance)
+      user.md           # user discovery seed (copied to each instance)
+      skills/
+        update.md       # seed update instructions (copied to each instance)
   tests/           # pytest
 ```
 
@@ -108,4 +115,36 @@ uv run ty check src/
 
 ## Instance Layout
 
-A maton instance lives at `~/.maton/matons/<name>/` and is a git repository. See `task.md` for the current design discussion on filesystem layout.
+A maton instance lives at `~/.maton/matons/maton-YYYYMMDD-HHMMSS/` and is a git repository.
+
+```text
+~/.maton/matons/maton-YYYYMMDD-HHMMSS/
+├── .git/
+├── .gitignore
+├── __init__.py
+├── AGENTS.md
+├── Maton.md
+├── ask.py
+├── cli.py
+├── init.py
+├── self.md
+├── user.md
+├── journal/
+│   └── .gitkeep
+├── logs/              (git-ignored)
+└── skills/
+    └── update.md
+```
+
+## Known Issues
+
+### `maton ask` is broken after v0.2.0
+
+`maton ask <name> <question>` expects:
+1. A name-based directory (`~/.maton/matons/<name>/`)
+2. `Maton.md` as an identity/system prompt
+
+After the init upgrade, instances use timestamp directories and `Maton.md` is a getting-started guide, not an identity prompt. Both assumptions are broken.
+
+**Status**: Known consequence. Will be fixed in a separate task.
+**Workaround**: Use the LLM driver (e.g., OpenCode) to open the instance directory directly.

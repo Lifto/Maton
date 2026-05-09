@@ -13,10 +13,10 @@ def main() -> None:
 
 
 @app.command()
-def init(name: str = typer.Argument(..., help="Name of the new maton instance.")) -> None:
+def init() -> None:
     """Create a new maton instance as a git repository."""
-    maton_path = create_maton(name)
-    typer.echo(f"Created maton '{name}' at {maton_path}")
+    maton_path = create_maton()
+    typer.echo(f"Created maton at {maton_path}")
 
 
 @app.command()
