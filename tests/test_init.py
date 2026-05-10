@@ -46,19 +46,29 @@ def test_create_maton_copies_user_md(tmp_path: Path) -> None:
     assert (result / "user.md").is_file()
 
 
-def test_create_maton_copies_update_skill(tmp_path: Path) -> None:
-    """skills/update.md is present in the instance."""
+def test_create_maton_copies_skills(tmp_path: Path) -> None:
+    """Skill files are present in the instance."""
     result = create_maton(base_dir=tmp_path)
     assert (result / "skills" / "update.md").is_file()
+    assert (result / "skills" / "dispatch.md").is_file()
+    assert (result / "skills" / "ideate.md").is_file()
 
 
-def test_create_maton_copies_python_files(tmp_path: Path) -> None:
-    """init.py, cli.py, ask.py, and __init__.py are all present in the instance."""
+def test_create_maton_copies_state_files(tmp_path: Path) -> None:
+    """State files (guardrails, schedule, backlog) are present in the instance."""
     result = create_maton(base_dir=tmp_path)
-    assert (result / "init.py").is_file()
-    assert (result / "cli.py").is_file()
-    assert (result / "ask.py").is_file()
-    assert (result / "__init__.py").is_file()
+    assert (result / "guardrails.yaml").is_file()
+    assert (result / "schedule.yaml").is_file()
+    assert (result / "backlog.yaml").is_file()
+
+
+def test_create_maton_excludes_python_package_files(tmp_path: Path) -> None:
+    """Package code (init.py, cli.py, ask.py) is NOT copied to instances."""
+    result = create_maton(base_dir=tmp_path)
+    assert not (result / "init.py").exists()
+    assert not (result / "cli.py").exists()
+    assert not (result / "ask.py").exists()
+    assert not (result / "__init__.py").exists()
 
 
 def test_create_maton_creates_gitignore(tmp_path: Path) -> None:

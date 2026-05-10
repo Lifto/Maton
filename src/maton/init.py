@@ -28,9 +28,8 @@ def create_maton(base_dir: Path | None = None) -> Path:
     instance_name = f"maton-{timestamp}"
     instance_path = base_dir / instance_name
 
-    # Copy entire package directory (this file's parent) to instance
-    seed_path = Path(__file__).parent
-    shutil.copytree(seed_path, instance_path, ignore=shutil.ignore_patterns("__pycache__"))
+    seed_path = Path(__file__).parent / "seed"
+    shutil.copytree(seed_path, instance_path)
 
     # Create journal/ with .gitkeep (so git tracks the directory)
     journal_dir = instance_path / "journal"

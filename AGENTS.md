@@ -39,15 +39,24 @@ Maton/
   src/
     maton/              # package source
       __init__.py
-      AGENTS.md         # instance LLM bootstrap (copied to each instance)
-      Maton.md          # getting-started guide (copied to each instance)
       ask.py            # `maton ask`
       cli.py            # Typer entrypoint
       init.py           # `maton init`
-      self.md           # identity seed (copied to each instance)
-      user.md           # user discovery seed (copied to each instance)
-      skills/
-        update.md       # seed update instructions (copied to each instance)
+      seed/             # copied to each instance by `maton init`
+        AGENTS.md       # instance LLM bootstrap
+        Maton.md        # getting-started guide
+        self.md         # identity seed
+        user.md         # user discovery seed
+        guardrails.yaml # permission model
+        schedule.yaml   # recurring tasks
+        backlog.yaml    # task queue
+        skills/
+          dispatch.md   # dispatcher skill
+          ideate.md     # idle-brain ideation skill
+          update.md     # seed update skill
+          perpetual-loop.md  # architecture reference
+      hitch/            # scheduling infrastructure (not copied to instances)
+        __init__.py
   tests/           # pytest
 ```
 
@@ -116,24 +125,27 @@ uv run ty check src/
 ## Instance Layout
 
 A maton instance lives at `~/.maton/matons/maton-YYYYMMDD-HHMMSS/` and is a git repository.
+It contains only seed files — no Python package code.
 
 ```text
 ~/.maton/matons/maton-YYYYMMDD-HHMMSS/
 ├── .git/
 ├── .gitignore
-├── __init__.py
 ├── AGENTS.md
 ├── Maton.md
-├── ask.py
-├── cli.py
-├── init.py
 ├── self.md
 ├── user.md
+├── guardrails.yaml
+├── schedule.yaml
+├── backlog.yaml
 ├── journal/
 │   └── .gitkeep
 ├── logs/              (git-ignored)
 └── skills/
-    └── update.md
+    ├── dispatch.md
+    ├── ideate.md
+    ├── update.md
+    └── perpetual-loop.md
 ```
 
 ## Known Issues

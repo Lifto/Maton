@@ -25,6 +25,9 @@ You provide all capabilities: file operations, git, task management. The maton's
 | `Maton.md` | Getting-started guide — read this first |
 | `self.md` | The maton's identity, personality, and persistent self-model |
 | `user.md` | What the maton knows about its human |
+| `guardrails.yaml` | Permission model — what the maton can and cannot do |
+| `schedule.yaml` | Recurring tasks and their due times |
+| `backlog.yaml` | Task queue — the maton's to-do list |
 | `journal/` | Summarized learnings — tracked in git |
 | `logs/` | Raw session transcripts — git-ignored, ephemeral |
 | `skills/` | Reusable skill files the maton can load |
