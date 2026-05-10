@@ -256,6 +256,10 @@ def main() -> None:
     parser.add_argument("--log-file", type=Path, default=None, help="log file path (default: hitch_dir/runner.log)")
     args = parser.parse_args()
 
+    import setproctitle
+
+    setproctitle.setproctitle(f"{args.instance_dir.name}-hitch")
+
     logging.basicConfig(
         filename=str(args.log_file or args.hitch_dir / "runner.log"),
         format="%(asctime)s %(message)s",
