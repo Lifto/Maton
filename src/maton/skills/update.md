@@ -9,6 +9,21 @@ You decide what to adopt. Review each diff, apply your judgment, and document yo
 
 ---
 
+## Path Mapping
+
+The seed repo is a Python package — files live under `src/maton/`. Your instance stores the same files at `./` (the root). **There is NO `src/maton/` directory in your instance.**
+
+| Checklist entry | Seed path | Your path |
+|---|---|---|
+| `AGENTS.md` | `repos/Maton/src/maton/AGENTS.md` | `./AGENTS.md` |
+| `skills/ideate.md` | `repos/Maton/src/maton/skills/ideate.md` | `./skills/ideate.md` |
+
+To diff any file: `diff repos/Maton/src/maton/<entry> ./<entry>`
+
+Never look for `src/` or `src/maton/` in this instance — those paths do not exist here.
+
+---
+
 ## Steps
 
 ### 1. Fetch the seed
