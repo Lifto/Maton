@@ -57,8 +57,8 @@ Rules:
 
 1. Write the updated `backlog.yaml` with your new tasks.
 2. Commit with message: `ideate: added N tasks to backlog`
-3. Touch the trigger file:
 
-```bash
-touch ~/.maton/hitch/trigger
-```
+## Error Rules
+
+- If git fails twice in a row, write the error to journal and stop. Do not retry.
+- Do not attempt to fix git infrastructure (lock files, merge conflicts).
