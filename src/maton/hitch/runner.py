@@ -11,7 +11,6 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
-from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -37,40 +36,6 @@ def load_state(instance_dir: Path) -> dict[str, str]:
         key: path.read_text() if (path := instance_dir / filename).exists() else "empty"
         for key, filename in _STATE_FILES.items()
     }
-
-
-def check_cooldown(hitch_dir: Path) -> bool:
-    """Return True if a cooldown file exists and hasn't expired."""
-    cooldown_file = hitch_dir / "cooldown"
-    if not cooldown_file.exists():
-        return False
-    try:
-        dt = datetime.fromisoformat(cooldown_file.read_text().strip())
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        return datetime.now(UTC) < dt
-    except (ValueError, OSError):
-        return False
-
-
-def check_quiet_hours(guardrails_text: str) -> bool:
-    """Return True if the current time falls within configured quiet hours."""
-    try:
-        guardrails = yaml.safe_load(guardrails_text) or {}
-    except yaml.YAMLError:
-        return False
-    qh = guardrails.get("quiet_hours", {})
-    if not qh.get("enabled"):
-        return False
-    try:
-        now = datetime.now(ZoneInfo(qh.get("timezone", "UTC"))).time()
-        start = datetime.strptime(qh["start"], "%H:%M").time()  # noqa: DTZ007
-        end = datetime.strptime(qh["end"], "%H:%M").time()  # noqa: DTZ007
-        if start <= end:
-            return start <= now <= end
-        return now >= start or now <= end
-    except (KeyError, ValueError):
-        return False
 
 
 def _is_due(task: dict[str, Any]) -> bool:
@@ -258,15 +223,7 @@ def run(
     Returns:
         0 on success or skip, negative on timeout, positive on LLM error.
     """
-    if check_cooldown(hitch_dir):
-        log.info("SKIP: cooldown active")
-        return 0
-
     state = load_state(instance_dir)
-
-    if check_quiet_hours(state["guardrails"]):
-        log.info("SKIP: quiet hours")
-        return 0
 
     lock = _Lock(hitch_dir / "lock")
     if not lock.acquire():
@@ -283,6 +240,10 @@ def run(
         log.info("START: %s", skill_name)
 
         prompt = assemble_prompt(skill_content, state)
+        index_lock = instance_dir / ".git" / "index.lock"
+        if index_lock.exists():
+            log.info("GIT_LOCK: removed stale index.lock")
+            index_lock.unlink(missing_ok=True)
         head_before = _git_head(instance_dir)
         t0 = time.monotonic()
         exit_code = _invoke(instance_dir, prompt, model, timeout)
@@ -299,6 +260,10 @@ def run(
         return exit_code
     finally:
         lock.release()
+        index_lock = instance_dir / ".git" / "index.lock"
+        if index_lock.exists():
+            log.info("GIT_LOCK: removed stale index.lock")
+            index_lock.unlink(missing_ok=True)
         (hitch_dir / "trigger").write_text("")
 
 
