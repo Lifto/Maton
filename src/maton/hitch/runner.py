@@ -88,34 +88,109 @@ def _count_ready(state: dict[str, str]) -> tuple[int, int]:
     return ready, due
 
 
+def _find_due_schedule(state: dict[str, str]) -> dict[str, Any] | None:
+    """Return the first due recurring task, or None."""
+    try:
+        schedule = yaml.safe_load(state["schedule"]) or {}
+    except yaml.YAMLError:
+        return None
+    for item in schedule.get("recurring") or []:
+        if _is_due(item):
+            return item
+    return None
+
+
+_PRIORITY_ORDER = {"critical": 0, "high": 1, "normal": 2, "low": 3}
+
+
+def _find_ready_task(state: dict[str, str]) -> dict[str, Any] | None:
+    """Return the highest-priority ready (unblocked) backlog task, or None."""
+    try:
+        backlog = yaml.safe_load(state["backlog"]) or {}
+    except yaml.YAMLError:
+        return None
+    tasks = [t for t in (backlog.get("tasks") or []) if t.get("status") == "ready" and not t.get("blocked_by")]
+    if not tasks:
+        return None
+    return min(tasks, key=lambda t: (_PRIORITY_ORDER.get(t.get("priority", "normal"), 2), t.get("created", "")))
+
+
+def _needs_maintenance(instance_dir: Path) -> bool:
+    """Return True if the instance needs maintenance attention."""
+    if (instance_dir / ".git" / "index.lock").exists():
+        return True
+    journal_dir = instance_dir / "journal"
+    if journal_dir.exists():
+        entries = sorted(journal_dir.glob("*.md"))
+        if entries:
+            mtime = entries[-1].stat().st_mtime
+            if (time.time() - mtime) > 48 * 3600:
+                return True
+    return False
+
+
 def has_ready_work(state: dict[str, str]) -> bool:
     """Return True if the backlog has ready tasks or the schedule has due items."""
     ready, due = _count_ready(state)
     return ready > 0 or due > 0
 
 
-def select_skill(instance_dir: Path, state: dict[str, str]) -> tuple[str, str]:
+def select_skill(instance_dir: Path, state: dict[str, str]) -> tuple[str, str, dict[str, Any]]:
     """Pick the skill to invoke based on current state.
 
+    Priority: schedule → backlog → maintenance → ideate.
+
     Returns:
-        (skill_name, skill_content) tuple.
+        (skill_name, skill_content, task_context) tuple.
+        task_context is the specific task/schedule item dict (empty dict for maintenance/ideate).
     """
-    if has_ready_work(state):
-        return ("dispatch", (instance_dir / "skills" / "dispatch.md").read_text())
-    return ("ideate", (instance_dir / "skills" / "ideate.md").read_text())
+    skills_dir = instance_dir / "skills"
+
+    due = _find_due_schedule(state)
+    if due is not None:
+        return ("dispatch-schedule", (skills_dir / "dispatch-schedule.md").read_text(), due)
+
+    ready = _find_ready_task(state)
+    if ready is not None:
+        return ("dispatch-task", (skills_dir / "dispatch-task.md").read_text(), ready)
+
+    if _needs_maintenance(instance_dir):
+        return ("dispatch-maintenance", (skills_dir / "dispatch-maintenance.md").read_text(), {})
+
+    return ("ideate", (skills_dir / "ideate.md").read_text(), {})
 
 
-def assemble_prompt(skill_content: str, state: dict[str, str]) -> str:
-    """Combine skill instructions with inline state for the LLM."""
-    return (
-        f"{skill_content}\n\n"
-        "--- CURRENT STATE ---\n\n"
-        f"=== BACKLOG (backlog.yaml) ===\n{state['backlog']}\n\n"
-        f"=== SCHEDULE (schedule.yaml) ===\n{state['schedule']}\n\n"
-        f"=== GUARDRAILS (guardrails.yaml) ===\n{state['guardrails']}\n\n"
-        f"=== IDENTITY (self.md) ===\n{state['identity']}\n\n"
-        f"=== USER (user.md) ===\n{state['user']}"
-    )
+def assemble_prompt(
+    skill_name: str,
+    skill_content: str,
+    state: dict[str, str],
+    task_context: dict[str, Any] | None = None,
+) -> str:
+    """Combine skill instructions with filtered inline state for the LLM."""
+    parts = [skill_content, "\n\n--- CURRENT STATE ---\n"]
+
+    if task_context:
+        parts.append(f"\n=== TASK ===\n{yaml.dump(task_context, default_flow_style=False)}")
+
+    if skill_name == "dispatch-task":
+        parts.append(f"\n=== GUARDRAILS (guardrails.yaml) ===\n{state['guardrails']}")
+        parts.append(f"\n=== USER (user.md) ===\n{state['user']}")
+    elif skill_name == "dispatch-schedule":
+        parts.append(f"\n=== GUARDRAILS (guardrails.yaml) ===\n{state['guardrails']}")
+        parts.append(f"\n=== SCHEDULE (schedule.yaml) ===\n{state['schedule']}")
+        parts.append(f"\n=== USER (user.md) ===\n{state['user']}")
+    elif skill_name == "dispatch-maintenance":
+        parts.append(f"\n=== BACKLOG (backlog.yaml) ===\n{state['backlog']}")
+        parts.append(f"\n=== SCHEDULE (schedule.yaml) ===\n{state['schedule']}")
+        parts.append(f"\n=== GUARDRAILS (guardrails.yaml) ===\n{state['guardrails']}")
+        parts.append(f"\n=== IDENTITY (self.md) ===\n{state['identity']}")
+        parts.append(f"\n=== USER (user.md) ===\n{state['user']}")
+    else:  # ideate
+        parts.append(f"\n=== BACKLOG (backlog.yaml) ===\n{state['backlog']}")
+        parts.append(f"\n=== USER (user.md) ===\n{state['user']}")
+        parts.append(f"\n=== IDENTITY (self.md) ===\n{state['identity']}")
+
+    return "".join(parts)
 
 
 class _Lock:
@@ -236,10 +311,10 @@ def run(
         ready, due = _count_ready(state)
         log.info("STATE: %d ready task(s), %d due schedule(s)", ready, due)
 
-        skill_name, skill_content = select_skill(instance_dir, state)
+        skill_name, skill_content, task_context = select_skill(instance_dir, state)
         log.info("START: %s", skill_name)
 
-        prompt = assemble_prompt(skill_content, state)
+        prompt = assemble_prompt(skill_name, skill_content, state, task_context)
         index_lock = instance_dir / ".git" / "index.lock"
         if index_lock.exists():
             log.info("GIT_LOCK: removed stale index.lock")
