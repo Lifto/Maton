@@ -242,6 +242,7 @@ def run(
         return exit_code
     finally:
         lock.release()
+        (hitch_dir / "trigger").write_text("")
 
 
 def main() -> None:

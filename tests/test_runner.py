@@ -250,8 +250,8 @@ def test_run_skips_on_quiet_hours(mock_invoke, tmp_path: Path) -> None:
 
 
 @patch("maton.hitch.runner._invoke", return_value=0)
-def test_run_clears_trigger_and_invokes(mock_invoke, tmp_path: Path) -> None:
-    """run() clears trigger file and invokes the LLM driver."""
+def test_run_re_arms_trigger_after_dispatch(mock_invoke, tmp_path: Path) -> None:
+    """run() re-creates trigger after dispatch to keep the perpetual loop running."""
     from maton.hitch.runner import run
 
     instance = _make_instance(tmp_path)
@@ -261,7 +261,7 @@ def test_run_clears_trigger_and_invokes(mock_invoke, tmp_path: Path) -> None:
 
     result = run(instance, hitch, model="test/model")
     assert result == 0
-    assert not (hitch / "trigger").exists()
+    assert (hitch / "trigger").exists()
     assert not (hitch / "lock").exists()
     mock_invoke.assert_called_once()
 
