@@ -48,20 +48,20 @@ If `logs/update-checklist.txt` already exists from a previous run, read it and r
 For each `pending` file in the checklist, in order:
 
 1. Check if it exists in this instance
-2. If it exists, diff it: `diff repos/Maton/src/maton/<file> ./<file>`
-3. If the diff is empty (files are identical), mark `done: <file> (identical)` in the checklist
-4. If the diff shows changes, decide: **adopt**, **skip**, or **merge**
-5. Update the checklist immediately: `done: <file> (adopted|skipped|merged)`
+2. If it does **not** exist: read the seed version, decide **adopt** or **skip**, update checklist
+3. If it exists, diff it: `diff repos/Maton/src/maton/<file> ./<file>`
+4. If the diff is empty (files are identical), mark `done: <file> (identical)` in the checklist
+5. If the diff shows changes, decide: **adopt**, **skip**, or **merge**
+6. Update the checklist immediately: `done: <file> (adopted|skipped|merged|identical)`
 
 Do not move to the next file until the current file's checklist entry is updated.
 
 **Decision heuristics:**
 
+- New files (not in instance): adopt unless the content is clearly irrelevant to this maton
 - `.md` skill/config files with no local edits → adopt is usually safe
 - `.py` files this maton has customised → merge carefully; do not overwrite without reviewing line by line
 - If you are genuinely uncertain about a file's local significance, escalate to the user
-
-For files present in seed but absent in this instance: read content, decide adopt or skip, update checklist.
 
 ### 4. Commit and journal
 
