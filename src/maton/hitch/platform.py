@@ -27,12 +27,19 @@ def _load_config(hitch_dir: Path) -> dict[str, Any]:
     return yaml.safe_load(config_path.read_text()) or {}
 
 
-def _runner_path() -> str:
-    return str(Path(__file__).parent / "runner.py")
+def _hitch_binary() -> str:
+    """Find the maton-hitch entry point binary."""
+    import shutil as _shutil
 
-
-def _python_path() -> str:
-    return sys.executable
+    found = _shutil.which("maton-hitch")
+    if found:
+        return found
+    # Fallback: same bin dir as the running Python
+    candidate = Path(sys.executable).parent / "maton-hitch"
+    if candidate.exists():
+        return str(candidate)
+    msg = "maton-hitch not found — is maton installed?"
+    raise FileNotFoundError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -42,8 +49,7 @@ def _python_path() -> str:
 
 def _launchd_plist(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) -> str:
     label = _service_name(instance_dir)
-    python = _python_path()
-    runner = _runner_path()
+    binary = _hitch_binary()
     model = config.get("model", "")
     timeout = config.get("timeout", 300)
     trigger_path = str(hitch_dir / "trigger")
@@ -58,8 +64,7 @@ def _launchd_plist(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) 
             <string>{label}</string>
             <key>ProgramArguments</key>
             <array>
-                <string>{python}</string>
-                <string>{runner}</string>
+                <string>{binary}</string>
                 <string>--instance-dir</string>
                 <string>{instance_dir}</string>
                 <string>--hitch-dir</string>
@@ -142,8 +147,7 @@ def uninstall_launchd(instance_dir: Path, hitch_dir: Path) -> bool:
 
 
 def _systemd_unit(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) -> str:
-    python = _python_path()
-    runner = _runner_path()
+    binary = _hitch_binary()
     model = config.get("model", "")
     timeout = config.get("timeout", 300)
 
@@ -153,7 +157,7 @@ def _systemd_unit(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) -
 
         [Service]
         Type=oneshot
-        ExecStart={python} {runner} \\
+        ExecStart={binary} \\
             --instance-dir {instance_dir} \\
             --hitch-dir {hitch_dir} \\
             --model {model} \\

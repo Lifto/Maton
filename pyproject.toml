@@ -30,6 +30,7 @@ Changelog = "https://github.com/Lifto/Maton/blob/main/CHANGELOG.md"
 
 [project.scripts]
 maton = "maton.cli:app"
+maton-hitch = "maton.hitch.runner:main"
 
 [dependency-groups]
 dev = [
