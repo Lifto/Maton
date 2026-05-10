@@ -50,7 +50,9 @@ def test_create_maton_copies_skills(tmp_path: Path) -> None:
     """Skill files are present in the instance."""
     result = create_maton(base_dir=tmp_path)
     assert (result / "skills" / "update.md").is_file()
-    assert (result / "skills" / "dispatch.md").is_file()
+    assert (result / "skills" / "dispatch-task.md").is_file()
+    assert (result / "skills" / "dispatch-schedule.md").is_file()
+    assert (result / "skills" / "dispatch-maintenance.md").is_file()
     assert (result / "skills" / "ideate.md").is_file()
 
 

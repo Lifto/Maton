@@ -10,9 +10,10 @@ import yaml
 
 from maton.hitch.runner import (
     _count_ready,
+    _find_due_schedule,
+    _find_ready_task,
+    _needs_maintenance,
     assemble_prompt,
-    check_cooldown,
-    check_quiet_hours,
     has_ready_work,
     load_state,
     select_skill,
@@ -25,13 +26,17 @@ def _make_instance(tmp_path: Path) -> Path:
     instance.mkdir()
     (instance / "backlog.yaml").write_text("tasks: []\n")
     (instance / "schedule.yaml").write_text("recurring: []\n")
-    (instance / "guardrails.yaml").write_text("quiet_hours:\n  enabled: false\n")
+    (instance / "guardrails.yaml").write_text("limits: {}\n")
     (instance / "self.md").write_text("I am a test maton.\n")
     (instance / "user.md").write_text("Test user.\n")
     skills = instance / "skills"
     skills.mkdir()
-    (skills / "dispatch.md").write_text("# Dispatch\n")
+    (skills / "dispatch-task.md").write_text("# Dispatch Task\n")
+    (skills / "dispatch-schedule.md").write_text("# Dispatch Schedule\n")
+    (skills / "dispatch-maintenance.md").write_text("# Dispatch Maintenance\n")
     (skills / "ideate.md").write_text("# Ideate\n")
+    # Create .git dir so _needs_maintenance works
+    (instance / ".git").mkdir()
     return instance
 
 
@@ -50,75 +55,6 @@ def test_load_state_missing_file_returns_empty(tmp_path: Path) -> None:
     state = load_state(instance)
     assert state["backlog"] == "empty"
     assert state["identity"] == "empty"
-
-
-def test_check_cooldown_no_file(tmp_path: Path) -> None:
-    """No cooldown file means not in cooldown."""
-    assert check_cooldown(tmp_path) is False
-
-
-def test_check_cooldown_future(tmp_path: Path) -> None:
-    """Cooldown with future timestamp is active."""
-    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
-    (tmp_path / "cooldown").write_text(future)
-    assert check_cooldown(tmp_path) is True
-
-
-def test_check_cooldown_past(tmp_path: Path) -> None:
-    """Cooldown with past timestamp is expired."""
-    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
-    (tmp_path / "cooldown").write_text(past)
-    assert check_cooldown(tmp_path) is False
-
-
-def test_check_cooldown_bad_content(tmp_path: Path) -> None:
-    """Unparseable cooldown file is treated as no cooldown."""
-    (tmp_path / "cooldown").write_text("not-a-date")
-    assert check_cooldown(tmp_path) is False
-
-
-def test_check_quiet_hours_disabled() -> None:
-    """Disabled quiet hours returns False."""
-    guardrails = yaml.dump({"quiet_hours": {"enabled": False}})
-    assert check_quiet_hours(guardrails) is False
-
-
-def test_check_quiet_hours_inside_window() -> None:
-    """Returns True when current time is within quiet hours window."""
-    guardrails = yaml.dump(
-        {
-            "quiet_hours": {
-                "enabled": True,
-                "start": "00:00",
-                "end": "23:59",
-                "timezone": "UTC",
-            }
-        }
-    )
-    assert check_quiet_hours(guardrails) is True
-
-
-def test_check_quiet_hours_outside_window() -> None:
-    """Returns False when current time is outside quiet hours window."""
-    now_hour = datetime.now(UTC).hour
-    start = (now_hour + 2) % 24
-    end = (now_hour + 3) % 24
-    guardrails = yaml.dump(
-        {
-            "quiet_hours": {
-                "enabled": True,
-                "start": f"{start:02d}:00",
-                "end": f"{end:02d}:00",
-                "timezone": "UTC",
-            }
-        }
-    )
-    assert check_quiet_hours(guardrails) is False
-
-
-def test_check_quiet_hours_invalid_yaml() -> None:
-    """Invalid YAML is treated as not in quiet hours."""
-    assert check_quiet_hours("{{not yaml") is False
 
 
 def test_has_ready_work_empty_backlog() -> None:
@@ -178,28 +114,31 @@ def test_has_ready_work_every_n_minutes_due() -> None:
     assert has_ready_work(state) is True
 
 
-def test_select_skill_dispatch_when_work(tmp_path: Path) -> None:
-    """Selects dispatch skill when backlog has ready tasks."""
+def test_select_skill_routes_to_dispatch_task_when_backlog_ready(tmp_path: Path) -> None:
+    """Selects dispatch-task skill when backlog has ready tasks."""
     instance = _make_instance(tmp_path)
-    backlog = yaml.dump({"tasks": [{"status": "ready", "blocked_by": []}]})
+    task = {"status": "ready", "blocked_by": [], "priority": "normal", "created": "2026-01-01"}
+    backlog = yaml.dump({"tasks": [task]})
     state = load_state(instance)
     state["backlog"] = backlog
-    name, content = select_skill(instance, state)
-    assert name == "dispatch"
-    assert "Dispatch" in content
+    name, content, ctx = select_skill(instance, state)
+    assert name == "dispatch-task"
+    assert "Dispatch Task" in content
+    assert ctx.get("status") == "ready"
 
 
-def test_select_skill_ideate_when_no_work(tmp_path: Path) -> None:
+def test_select_skill_routes_to_ideate_when_no_work(tmp_path: Path) -> None:
     """Selects ideate skill when no actionable work exists."""
     instance = _make_instance(tmp_path)
     state = load_state(instance)
-    name, content = select_skill(instance, state)
+    name, content, ctx = select_skill(instance, state)
     assert name == "ideate"
     assert "Ideate" in content
+    assert ctx == {}
 
 
-def test_assemble_prompt_contains_all_sections() -> None:
-    """Assembled prompt includes skill content and all state sections."""
+def test_assemble_prompt_dispatch_task_filters_state() -> None:
+    """dispatch-task prompt includes guardrails and user, not backlog or schedule."""
     state = {
         "backlog": "tasks: []",
         "schedule": "recurring: []",
@@ -207,48 +146,122 @@ def test_assemble_prompt_contains_all_sections() -> None:
         "identity": "I am maton",
         "user": "My human",
     }
-    prompt = assemble_prompt("# Test Skill", state)
-    assert "# Test Skill" in prompt
+    task_ctx = {"id": "task-001", "summary": "Do something"}
+    prompt = assemble_prompt("dispatch-task", "# Dispatch Task\n", state, task_ctx)
+    assert "# Dispatch Task" in prompt
     assert "--- CURRENT STATE ---" in prompt
-    assert "=== BACKLOG" in prompt
-    assert "tasks: []" in prompt
-    assert "=== IDENTITY" in prompt
-    assert "I am maton" in prompt
+    assert "=== TASK ===" in prompt
+    assert "task-001" in prompt
+    assert "=== GUARDRAILS" in prompt
     assert "=== USER" in prompt
-    assert "My human" in prompt
+    # Must NOT include backlog or schedule
+    assert "=== BACKLOG" not in prompt
+    assert "=== SCHEDULE" not in prompt
 
 
-@patch("maton.hitch.runner._invoke", return_value=0)
-def test_run_skips_on_cooldown(mock_invoke, tmp_path: Path) -> None:
-    """run() returns 0 without invoking when cooldown is active."""
-    from maton.hitch.runner import run
+def test_assemble_prompt_ideate_filters_state() -> None:
+    """ideate prompt includes backlog, user, identity — not guardrails or schedule."""
+    state = {
+        "backlog": "tasks: []",
+        "schedule": "recurring: []",
+        "guardrails": "limits: {}",
+        "identity": "I am maton",
+        "user": "My human",
+    }
+    prompt = assemble_prompt("ideate", "# Ideate\n", state)
+    assert "=== BACKLOG" in prompt
+    assert "=== USER" in prompt
+    assert "=== IDENTITY" in prompt
+    assert "=== GUARDRAILS" not in prompt
+    assert "=== SCHEDULE" not in prompt
 
-    instance = _make_instance(tmp_path)
-    hitch = tmp_path / "hitch"
-    hitch.mkdir()
-    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
-    (hitch / "cooldown").write_text(future)
 
-    result = run(instance, hitch, model="test/model")
-    assert result == 0
-    mock_invoke.assert_not_called()
+def test_find_due_schedule_returns_first_due(tmp_path: Path) -> None:
+    """_find_due_schedule returns the first due recurring item."""
+    schedule = yaml.dump({"recurring": [{"id": "s1", "enabled": True, "frequency": "daily", "last_run": None}]})
+    state = {"schedule": schedule}
+    result = _find_due_schedule(state)
+    assert result is not None
+    assert result["id"] == "s1"
 
 
-@patch("maton.hitch.runner._invoke", return_value=0)
-def test_run_skips_on_quiet_hours(mock_invoke, tmp_path: Path) -> None:
-    """run() returns 0 without invoking during quiet hours."""
-    from maton.hitch.runner import run
+def test_find_due_schedule_returns_none_when_not_due(tmp_path: Path) -> None:
+    """_find_due_schedule returns None when no items are due."""
+    recent = datetime.now(UTC).isoformat()
+    schedule = yaml.dump({"recurring": [{"enabled": True, "frequency": "daily", "last_run": recent}]})
+    state = {"schedule": schedule}
+    assert _find_due_schedule(state) is None
 
-    instance = _make_instance(tmp_path)
-    (instance / "guardrails.yaml").write_text(
-        yaml.dump({"quiet_hours": {"enabled": True, "start": "00:00", "end": "23:59", "timezone": "UTC"}})
+
+def test_find_ready_task_returns_highest_priority(tmp_path: Path) -> None:
+    """_find_ready_task returns the highest-priority unblocked task."""
+    backlog = yaml.dump(
+        {
+            "tasks": [
+                {"id": "t1", "status": "ready", "priority": "low", "created": "2026-01-01", "blocked_by": []},
+                {"id": "t2", "status": "ready", "priority": "high", "created": "2026-01-01", "blocked_by": []},
+            ]
+        }
     )
-    hitch = tmp_path / "hitch"
-    hitch.mkdir()
+    state = {"backlog": backlog}
+    result = _find_ready_task(state)
+    assert result is not None
+    assert result["id"] == "t2"
 
-    result = run(instance, hitch, model="test/model")
-    assert result == 0
-    mock_invoke.assert_not_called()
+
+def test_find_ready_task_skips_blocked(tmp_path: Path) -> None:
+    """_find_ready_task skips tasks with blockers."""
+    backlog = yaml.dump(
+        {
+            "tasks": [
+                {"id": "t1", "status": "ready", "priority": "high", "created": "2026-01-01", "blocked_by": ["human"]},
+            ]
+        }
+    )
+    state = {"backlog": backlog}
+    assert _find_ready_task(state) is None
+
+
+def test_needs_maintenance_detects_index_lock(tmp_path: Path) -> None:
+    """_needs_maintenance returns True when .git/index.lock exists."""
+    instance = tmp_path / "instance"
+    instance.mkdir()
+    git_dir = instance / ".git"
+    git_dir.mkdir()
+    (git_dir / "index.lock").write_text("")
+    assert _needs_maintenance(instance) is True
+
+
+def test_needs_maintenance_false_when_clean(tmp_path: Path) -> None:
+    """_needs_maintenance returns False for a clean instance."""
+    instance = tmp_path / "instance"
+    instance.mkdir()
+    (instance / ".git").mkdir()
+    assert _needs_maintenance(instance) is False
+
+
+def test_select_skill_routes_to_schedule_first(tmp_path: Path) -> None:
+    """Schedule takes priority over backlog tasks."""
+    instance = _make_instance(tmp_path)
+    task = {"status": "ready", "blocked_by": [], "priority": "normal", "created": "2026-01-01"}
+    backlog = yaml.dump({"tasks": [task]})
+    schedule = yaml.dump({"recurring": [{"id": "s1", "enabled": True, "frequency": "daily", "last_run": None}]})
+    state = load_state(instance)
+    state["backlog"] = backlog
+    state["schedule"] = schedule
+    name, _, ctx = select_skill(instance, state)
+    assert name == "dispatch-schedule"
+    assert ctx["id"] == "s1"
+
+
+def test_select_skill_routes_to_maintenance(tmp_path: Path) -> None:
+    """Routes to maintenance when index.lock exists and no other work."""
+    instance = _make_instance(tmp_path)
+    (instance / ".git" / "index.lock").write_text("")
+    state = load_state(instance)
+    name, _, ctx = select_skill(instance, state)
+    assert name == "dispatch-maintenance"
+    assert ctx == {}
 
 
 def test_count_ready_empty() -> None:
