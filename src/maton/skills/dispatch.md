@@ -6,17 +6,18 @@ You are the LLM driver following these instructions. You have been invoked by th
 
 ---
 
-## Before You Do Anything
+## Your State
 
-Read these files in order. Do not skip any.
+The runner has pre-loaded your state files below this prompt under `--- CURRENT STATE ---`. You have:
 
-1. **`self.md`** — who you are, what you're here to do
-2. **`user.md`** — who your human is, what they care about
-3. **`guardrails.yaml`** — what you are and are not allowed to do
-4. **`schedule.yaml`** — recurring tasks and their due times
-5. **`backlog.yaml`** — the task queue
+- **IDENTITY (self.md)** — who you are, what you're here to do
+- **GUARDRAILS (guardrails.yaml)** — what you are and are not allowed to do
+- **SCHEDULE (schedule.yaml)** — recurring tasks and their due times
+- **BACKLOG (backlog.yaml)** — the task queue
 
-If any file is missing or corrupt, write an error entry to `journal/` and exit without touching trigger. The deadman timer will retry.
+Read them now. If any section says "empty", that file was missing — write an error entry to `journal/` and exit without touching trigger. The deadman timer will retry.
+
+You also have tool access (file read/write, git, bash) for execution. Use tools for doing work, not for reading state you already have.
 
 ---
 
