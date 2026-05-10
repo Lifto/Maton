@@ -28,6 +28,22 @@ A maton has two layers:
 
 The unit of work. A task is a directory containing structured markdown files: what to do, how to verify success, and the history of attempts. Tasks are recursive — a task can spawn tasks, and the children are the same class as the parent. Tasks are the same whether created by a human or by a maton.
 
+## Driver
+
+The LLM runtime that gives a maton its mind. A driver reads the maton's files, follows instructions, uses tools, and writes results back. OpenCode is a driver. Claude CLI is a driver. A Python script calling an API is a driver. The maton doesn't care which driver runs it — the files are the interface, the driver is interchangeable.
+
+## Hitch
+
+The OS-level mechanism that causes a maton to run. A launchd plist, a systemd timer, a cron job. The hitch fires the runner, which invokes the driver, which executes the dispatcher. The hitch has three behaviors: self-rescheduling (trigger file), deadman timer (fixed interval), and external triggering (anything touches the trigger file).
+
+## Dispatcher
+
+The entry point for autonomous operation. A skill (`skills/dispatch.md`) that reads the maton's state files, picks the next unit of work, executes it, records the result, and decides whether to run again. The dispatcher is what makes a maton perpetual rather than one-shot.
+
+## Guardrails
+
+The permission model. A YAML file (`guardrails.yaml`) that constrains what a maton is allowed to do: which repos it can write to, which actions it can take, when it should escalate to its human. Guardrails are advisory — they rely on the driver following instructions. They are the maton's conscience, not its cage.
+
 ## Human
 
 The bootstrap. The source of purpose. Humans express needs, and those needs become tasks. A human's normal interface to a maton is conversation — speaking or typing — and the maton translates that into the structured files that drive the system. But because the system is built on plain files, a human can also read, edit, or create those files directly. This is the audit path and, when needed, a way for humans to read and modify the system directly.
