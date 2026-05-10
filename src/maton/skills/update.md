@@ -31,13 +31,16 @@ Note the current seed commit hash for the commit message later.
 
 ### 2. Build a file list and track progress
 
-List all files in `repos/Maton/src/maton/` and write them to `logs/update-checklist.txt` with status tracking:
+List all files in the **seed** repo at `repos/Maton/src/maton/` (recursively, including subdirectories like `skills/`). This is the source of truth — the checklist must include every file the seed has, whether or not this instance has it yet.
+
+Write them to `logs/update-checklist.txt`:
 
 ```
 pending: AGENTS.md
 pending: Maton.md
 pending: self.md
 pending: skills/dispatch.md
+pending: skills/ideate.md
 ...
 ```
 
