@@ -80,7 +80,7 @@ For each task you execute:
 
 ### 1. Mark in-progress
 
-Update `backlog.yaml`: set the task's `status` to `in_progress`.
+Check the task's current `status` first. If it is already `in_progress`, skip this step. Otherwise, set it to `in_progress` in `backlog.yaml`.
 
 ### 2. Check guardrails
 
@@ -111,6 +111,8 @@ Check the task's `acceptance` criteria. For each criterion:
 
 ### 5. Record result
 
+Before recording, check: is the task already `done`? If yes, skip to step 6.
+
 If all acceptance criteria pass:
 - Set `status` to `done`
 - Set `completed` to current date
@@ -125,19 +127,14 @@ If acceptance criteria fail:
 
 ### 6. Journal
 
-Write a journal entry for this dispatch session:
-
-```
-journal/YYYY-MM-DD-dispatch-summary.md
-```
+Check if `journal/YYYY-MM-DD-dispatch-summary.md` already exists for today. If it does, append to it rather than creating a new file. If you already wrote about this task in the journal, do not write about it again.
 
 Include:
 - What tasks were attempted
 - What succeeded, what failed, what was skipped
 - Any observations or concerns for the human
-- Time spent (approximate)
 
-Commit the journal entry.
+Commit the journal entry. Before committing, run `git status` — if there are no staged changes, skip the commit.
 
 ---
 
@@ -177,10 +174,24 @@ echo "2026-05-10T07:00:00-04:00" > ~/.maton/hitch/cooldown
 
 ---
 
+---
+
+## Idempotency Rule
+
+Before performing any action, check whether it was already done. Specifically:
+- Before writing a journal entry → check if the file exists and already covers this task
+- Before committing → run `git status`; if nothing is staged, skip
+- Before marking a task done → check if it is already `done`
+- Before touching the trigger file → check if your work actually produced new actionable state
+
+Never repeat completed work. If you are unsure whether you already did something, check the filesystem or git log rather than doing it again.
+
+---
+
 ## Error Handling
 
 - Never leave `backlog.yaml` corrupt. If you can't update it cleanly, don't update it.
 - Task errors → mark `blocked`, write error to `context`, journal the failure.
 - Infrastructure errors (can't read files, git broken) → write to `logs/`, exit. Don't touch trigger.
 
-Commit all meaningful changes (backlog status, journal entries, task work, schedule updates). Prefix commit messages with `dispatch:`.
+Commit all meaningful changes (backlog status, journal entries, task work, schedule updates). Before each commit, run `git status` to confirm there are staged changes. Prefix commit messages with `dispatch:`.
