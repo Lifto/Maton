@@ -1,0 +1,64 @@
+# schedule.yaml — Recurring Tasks
+#
+# The dispatcher checks this file for tasks that are due. When a recurring task
+# is due, the dispatcher either executes it directly or creates a backlog entry.
+#
+# Frequency: daily | weekly | hourly | every_N_minutes
+# For weekly tasks, specify `day` (monday, tuesday, ...).
+# For daily tasks, specify `time` (HH:MM, 24-hour, local timezone).
+#
+# Schema:
+#   id:          Unique identifier
+#   summary:     What this recurring task does
+#   frequency:   How often it runs
+#   time:        When during the day (HH:MM) — optional for sub-daily
+#   day:         Day of week — required for weekly
+#   skill:       Path to a skill file that executes this task (optional)
+#   inline:      Inline instructions if no skill file exists (optional)
+#   last_run:    ISO datetime of last execution (updated by dispatcher)
+#   enabled:     true | false
+
+recurring: []
+
+# Example recurring tasks (remove or replace):
+#
+# recurring:
+#   - id: daily-briefing
+#     summary: "Prepare daily briefing for human"
+#     frequency: daily
+#     time: "07:00"
+#     skill: null
+#     inline: |
+#       1. Check news sources relevant to the human's interests
+#       2. Review project state (recent commits, open PRs, backlog changes)
+#       3. Check calendar/schedule if accessible
+#       4. Write briefing to briefings/YYYY-MM-DD.md
+#       5. Commit with message "briefing: YYYY-MM-DD"
+#     last_run: null
+#     enabled: true
+#
+#   - id: seed-check
+#     summary: "Check Maton seed repository for updates"
+#     frequency: weekly
+#     day: monday
+#     time: "08:00"
+#     skill: "skills/update.md"
+#     inline: null
+#     last_run: null
+#     enabled: true
+#
+#   - id: self-review
+#     summary: "Review and refine own skills, prompts, and knowledge"
+#     frequency: weekly
+#     day: friday
+#     time: "16:00"
+#     skill: null
+#     inline: |
+#       1. Review journal entries from this week
+#       2. Identify patterns, repeated questions, or inefficiencies
+#       3. Propose improvements to skills/ or self.md
+#       4. If improvements are concrete and low-risk, implement them
+#       5. If improvements need human review, add to backlog
+#       6. Write journal entry summarizing the review
+#     last_run: null
+#     enabled: true

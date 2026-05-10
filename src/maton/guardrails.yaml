@@ -1,0 +1,88 @@
+# guardrails.yaml — Permission Model
+#
+# The dispatcher reads this file before every action. These are advisory
+# constraints — the LLM is instructed to follow them, but enforcement depends
+# on the driver's capabilities. True sandboxing requires OS-level controls.
+#
+# This file is human-maintained. The maton may PROPOSE changes to guardrails
+# (as backlog tasks for human review) but must NEVER modify this file directly.
+
+# --- Repository Access ---
+# Which git repositories can the maton read and write?
+
+repositories:
+  writable: []
+    # Example:
+    # - path: "~/.maton/matons/liftomaton"
+    #   branch_policy: "any"        # This IS the maton's own repo
+    #   notes: "The maton's home. Full write access."
+    #
+    # - path: "~/Documents/Development/docs2db"
+    #   branch_policy: "feature_only"  # Never commit to main/master
+    #   notes: "Work on feature branches. Create PRs for review."
+
+  read_only: []
+    # Example:
+    # - path: "~/Documents/Development/Maton"
+    #   notes: "The seed repo. Read for updates, don't modify."
+
+# --- Action Permissions ---
+# What is the maton allowed to do?
+
+actions:
+  # Git operations
+  git_commit: true          # Can commit to writable repos (per branch_policy)
+  git_push: false           # NEVER push without human review
+  create_pr: false          # Can create pull requests (requires git_push or API)
+  merge_pr: false           # Human merges. Always.
+
+  # File operations
+  create_files: true        # Can create new files in writable repos
+  delete_files: false       # Destructive — requires human approval
+  modify_outside_repos: false  # Cannot touch files outside listed repositories
+
+  # Network
+  web_read: true            # Can fetch/read web content
+  web_write: false          # No posting, no API calls that modify state
+  install_packages: false   # No installing dependencies without approval
+
+  # System
+  run_shell_commands: true  # Can run non-destructive shell commands
+  destructive_commands: false  # No rm -rf, no drop table, no force push
+
+# --- Escalation Rules ---
+# When MUST the maton stop and ask the human?
+# The dispatcher checks these before acting. If a planned action matches
+# any rule, the maton writes the question to the backlog (priority: high,
+# status: blocked, blocked_by: "human") and moves on to the next task.
+
+escalation:
+  - "Any change to guardrails.yaml"
+  - "Any change to the identity section of self.md"
+  - "Deleting files or directories"
+  - "Any action on repositories not listed above"
+  - "Installing or upgrading dependencies"
+  - "Actions that cannot be reverted with git"
+  - "Spending money or consuming paid API quotas"
+  - "Sending messages or notifications to other people"
+  - "When genuinely uncertain whether an action is safe"
+
+# --- Resource Limits ---
+# Per-dispatch-session limits. The runner script enforces max_runtime_seconds
+# externally (via timeout). The others are advisory for the dispatcher.
+
+limits:
+  max_runtime_seconds: 300   # 5 minutes per dispatch cycle
+  max_retries: 2             # Retry a failed task at most twice before blocking it
+  max_commits_per_session: 5 # Don't go on a committing spree
+  max_tasks_per_session: 3   # Do at most 3 tasks per dispatch, then yield
+
+# --- Quiet Hours ---
+# Optional. If set, the dispatcher does not run during these hours.
+# The runner script checks this before invoking the dispatcher.
+
+quiet_hours:
+  enabled: false
+  start: "22:00"     # Local time
+  end: "07:00"       # Local time
+  timezone: "America/New_York"

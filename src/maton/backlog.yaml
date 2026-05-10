@@ -1,0 +1,55 @@
+# backlog.yaml — Task Queue
+#
+# The dispatcher reads this file to find work. Tasks are processed in priority
+# order. Only tasks with status "ready" are eligible for execution.
+#
+# This file is the maton's to-do list. Humans and matons both write to it.
+# Drop a task here and the next dispatch cycle picks it up.
+#
+# Priority: critical > high > normal > low > someday
+# Status:   ready | in_progress | blocked | done | cancelled
+#
+# Schema:
+#   id:          Unique identifier (task-NNN or descriptive slug)
+#   summary:     One-line description of what needs to happen
+#   priority:    critical | high | normal | low | someday
+#   status:      ready | in_progress | blocked | done | cancelled
+#   created:     ISO date when the task was added
+#   context:     Free-text background — why this task exists, relevant details
+#   acceptance:  List of concrete conditions that mean "done"
+#   blocked_by:  List of task IDs that must complete first (empty = unblocked)
+#   result:      Free-text summary of what happened (filled on completion)
+#   completed:   ISO date when the task was finished
+
+tasks: []
+
+# Example task (remove or replace with real tasks):
+#
+# tasks:
+#   - id: task-001
+#     summary: "Prepare daily briefing for human"
+#     priority: normal
+#     status: ready
+#     created: 2026-05-09
+#     context: |
+#       The human wants a daily summary of what happened, what's coming up,
+#       and anything that needs attention. Check news sources, calendar,
+#       and project state.
+#     acceptance:
+#       - "Briefing written to briefings/YYYY-MM-DD.md"
+#       - "Covers: news, calendar, project status, action items"
+#     blocked_by: []
+#
+#   - id: task-002
+#     summary: "Investigate docs2db startup performance"
+#     priority: low
+#     status: blocked
+#     created: 2026-05-09
+#     context: |
+#       docs2db-mcp takes 30-40 seconds to start due to embedding model loading.
+#       Investigate lazy loading, caching, or model pre-warming.
+#     acceptance:
+#       - "Root cause identified and documented"
+#       - "At least one mitigation approach proposed with tradeoffs"
+#     blocked_by:
+#       - task-001
