@@ -1,113 +1,63 @@
 # Ideate
 
-**Purpose:** Generate useful tasks when the backlog is empty. You are the maton's idle brain.
+You are running UNATTENDED. No human is present. Do not ask questions. Do not ask for confirmation. Just do the work described below.
 
-You have been invoked by `dispatch.md` because there is nothing to do. Your job: figure out what SHOULD be done, and add it to `backlog.yaml` for the next dispatch cycle to execute.
+Your state files are pre-loaded below this prompt. Do not read them with tools.
 
-You propose. You do not execute. Every idea becomes a backlog item.
+## Your Job
 
-You have already read the state files (self.md, user.md, backlog.yaml, schedule.yaml, guardrails.yaml) in the dispatch cycle. Also review recent `journal/` entries for patterns.
-
----
-
-## Ideation Phases
-
-Work through these in order. Each phase may produce zero or several backlog items.
-
-### Phase 1: Know your user
-
-**This is the most important phase.** A maton that doesn't know its user is useless.
-
-Check `user.md`. If the discovery questions are unanswered:
-
-- Create a backlog task: **ask the user** each unanswered question. One task per question, or batch related ones.
-- The task's `context` should explain WHY you're asking — what you'd do differently if you knew the answer.
-- These tasks will require human interaction. Set `acceptance`: "user.md updated with the answer."
-
-Questions to drive toward:
-
-- What does the user want the maton to do in the background? (This is THE question.)
-- What are their ongoing projects and commitments?
-- How do they prefer to be communicated with?
-- What recurring annoyances do they have that could be automated?
-- What information do they want surfaced regularly? (news, repo status, calendar, weather, etc.)
-
-If `user.md` is well-populated, check: has anything likely changed? People's priorities shift. If the last user discovery was months ago, propose a check-in.
-
-### Phase 2: Know your environment
-
-If `knowledge/` lacks recent environment info, create tasks to survey:
-
-- **Communication channels**: installed apps (Messages, Slack, etc.), CLI tools (`osascript`, `terminal-notifier`), notification mechanisms. Goal: find the best way to reach the user.
-- **Platform capabilities**: OS, shell, package managers, dev tools, repos from `guardrails.yaml`.
-
-Skip if `knowledge/` already has this.
-
-### Phase 3: Default operations
-
-Check if these recurring tasks exist in `schedule.yaml`. If not, propose adding them:
-
-- **Daily brief**: morning summary — repo status (PRs, CI), backlog state, scheduled tasks due today. Skill: `skills/daily-brief.md`.
-- **Weekly review**: what got done, what's blocked, are priorities still right, any backlog items to cancel. Skill: `skills/weekly-review.md`.
-- **Repo health**: per writable repo — stale branches, dependency updates, open TODOs, CI status.
-
-### Phase 4: Proactive value
-
-Based on what you know about the user (from `user.md` and `journal/`):
-
-- Are there tasks the user does repeatedly that could be automated?
-- Are there things the user mentioned wanting but never created a task for?
-- Are there skills the maton should learn to be more useful?
-- Are there integrations that would help? (calendar, email, project management, etc.)
-
-Don't force it. If you don't know enough about the user yet, Phase 1 tasks are more important than speculative Phase 4 tasks.
-
-### Phase 5: Self-improvement
-
-- Are any skills outdated or underperforming? (check journal for task failures linked to skills)
-- Is `self.md` still accurate? Does the maton's self-model match its actual behavior?
-- Are there gaps in `knowledge/` that keep coming up?
-- Could any recurring manual task become a skill file?
+The backlog is empty. You need to add tasks to it. Read your state, think of useful work, and write new tasks directly into `backlog.yaml`.
 
 ---
 
-## Writing Backlog Items
+## Where To Find Ideas
 
-For each idea, add an entry to `backlog.yaml`:
+Look at `user.md` in your state. If the discovery questions are unanswered, that is your best source of tasks. For each unanswered question, create a task to ask the user.
+
+Other idea sources:
+
+- Is `schedule.yaml` empty? Create a task to set up a daily briefing or weekly review.
+- Is `self.md` mostly blank? Create a task to fill in your name, purpose, and values.
+- Are there writable repos in `guardrails.yaml`? Create a task to check their health (stale branches, open TODOs).
+- Can you discover what tools and apps are installed? Create a task to survey your environment.
+
+Only create tasks the maton can actually do within its guardrails.
+
+---
+
+## Backlog Item Format
+
+Each task you add to `backlog.yaml` must look exactly like this:
 
 ```yaml
-- id: task-NNN
-  summary: "<clear, actionable summary>"
-  priority: normal  # ideated tasks are 'normal' or 'low' — never 'high' or 'critical'
-  status: ready
-  created: "YYYY-MM-DD"
-  context: |
-    <why this task exists, what prompted it, what the maton should know when executing>
-  acceptance:
-    - "<concrete, verifiable criterion>"
+tasks:
+  - id: task-001
+    summary: "Ask the user what they want the maton to do"
+    priority: normal
+    status: ready
+    created: "2026-05-10"
+    context: |
+      user.md has unanswered discovery questions. The most important
+      question is what the user wants the maton to do in the background.
+      Without this, the maton cannot be useful.
+    acceptance:
+      - "Question written to journal for the user to see"
+      - "Task marked blocked until user responds"
+    blocked_by: []
 ```
 
-### Rules
-
-- **Do not duplicate.** Check existing backlog items (all statuses) before adding. If a similar task exists, skip it.
-- **Be specific.** "Improve things" is not a task. "Check docs2db repo for stale branches and report in journal" is.
-- **Be actionable.** Every task must be something the maton can actually do given its guardrails.
-- **Priority cap:** Ideated tasks are `normal` or `low`. Only the human sets `high` or `critical`.
-- **User-interaction tasks are valid.** If the maton needs to ask the user something, that's a real task. The execution is: write the question somewhere the user will see it (journal, notification, etc.) and mark it blocked until the user responds.
-
-### How many?
-
-Generate as many ideas as are genuinely useful. Don't pad. Don't hold back.
-
-But frontload: put the most impactful ideas first. If you have 10 ideas, the first 3 should be the ones that most improve the maton's ability to help its user.
+Rules:
+- Set priority to `normal` or `low`. Never `high` or `critical`.
+- Do not duplicate tasks that already exist in the backlog.
+- Be specific. Every task must describe a concrete action.
 
 ---
 
-## After Ideating
+## When You Are Done
 
-- Commit the updated `backlog.yaml` with message: `ideate: added N tasks to backlog`
-- Write a brief journal entry listing what you proposed and why
-- Touch the trigger file so the dispatcher picks up the new tasks immediately:
+1. Write the updated `backlog.yaml` with your new tasks.
+2. Commit with message: `ideate: added N tasks to backlog`
+3. Touch the trigger file:
 
 ```bash
 touch ~/.maton/hitch/trigger
