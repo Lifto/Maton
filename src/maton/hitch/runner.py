@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -99,22 +100,33 @@ def _is_due(task: dict[str, Any]) -> bool:
         return True
 
 
-def has_ready_work(state: dict[str, str]) -> bool:
-    """Return True if the backlog has ready tasks or the schedule has due items."""
+def _count_ready(state: dict[str, str]) -> tuple[int, int]:
+    """Count actionable backlog tasks and due scheduled items.
+
+    Returns:
+        (ready_tasks, due_schedules) tuple.
+    """
     try:
         backlog = yaml.safe_load(state["backlog"]) or {}
     except yaml.YAMLError:
         backlog = {}
     tasks = backlog.get("tasks") or []
-    if any(t.get("status") == "ready" and not t.get("blocked_by") for t in tasks):
-        return True
+    ready = sum(1 for t in tasks if t.get("status") == "ready" and not t.get("blocked_by"))
 
     try:
         schedule = yaml.safe_load(state["schedule"]) or {}
     except yaml.YAMLError:
         schedule = {}
     recurring = schedule.get("recurring") or []
-    return any(_is_due(r) for r in recurring)
+    due = sum(1 for r in recurring if _is_due(r))
+
+    return ready, due
+
+
+def has_ready_work(state: dict[str, str]) -> bool:
+    """Return True if the backlog has ready tasks or the schedule has due items."""
+    ready, due = _count_ready(state)
+    return ready > 0 or due > 0
 
 
 def select_skill(instance_dir: Path, state: dict[str, str]) -> tuple[str, str]:
@@ -171,6 +183,28 @@ class _Lock:
             self._path.unlink(missing_ok=True)
 
 
+def _git_head(instance_dir: Path) -> str | None:
+    """Return the current HEAD commit hash, or None if not a git repo."""
+    result = subprocess.run(  # noqa: S603
+        ["git", "-C", str(instance_dir), "rev-parse", "HEAD"],  # noqa: S607
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _commit_subjects(instance_dir: Path, since: str) -> list[str]:
+    """Return commit subject lines added after the given ref."""
+    result = subprocess.run(  # noqa: S603
+        ["git", "-C", str(instance_dir), "log", f"{since}..HEAD", "--format=%s"],  # noqa: S607
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return []
+    return [line for line in result.stdout.strip().splitlines() if line]
+
+
 def _invoke(instance_dir: Path, prompt: str, model: str, timeout: int) -> int:
     """Invoke the LLM driver and return its exit code."""
     cmd = [
@@ -183,13 +217,23 @@ def _invoke(instance_dir: Path, prompt: str, model: str, timeout: int) -> int:
         "--dangerously-skip-permissions",
         prompt,
     ]
-    proc = subprocess.Popen(cmd)  # noqa: S603, S607
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)  # noqa: S603, S607
     try:
-        proc.wait(timeout=timeout)
+        _, stderr_bytes = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
         proc.kill()
-        proc.wait()
-        log.warning("killed after %ds timeout", timeout)
+        proc.communicate()
+        log.warning("TIMEOUT: killed after %ds", timeout)
+        return -1
+    if stderr_bytes:
+        for line in stderr_bytes.decode(errors="replace").strip().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if "SSE read timed out" in line:
+                log.warning("SSE_TIMEOUT: model stalled mid-inference (chunkTimeout fired)")
+            else:
+                log.warning("STDERR: %s", line)
     return proc.returncode
 
 
@@ -232,13 +276,26 @@ def run(
     try:
         (hitch_dir / "trigger").unlink(missing_ok=True)
 
+        ready, due = _count_ready(state)
+        log.info("STATE: %d ready task(s), %d due schedule(s)", ready, due)
+
         skill_name, skill_content = select_skill(instance_dir, state)
         log.info("START: %s", skill_name)
 
         prompt = assemble_prompt(skill_content, state)
+        head_before = _git_head(instance_dir)
+        t0 = time.monotonic()
         exit_code = _invoke(instance_dir, prompt, model, timeout)
+        elapsed = time.monotonic() - t0
 
-        log.info("END: %s (exit %d)", skill_name, exit_code)
+        log.info("END: %s (exit %d, %.0fs)", skill_name, exit_code, elapsed)
+
+        head_after = _git_head(instance_dir)
+        if head_before and head_after and head_before != head_after:
+            for subj in _commit_subjects(instance_dir, head_before):
+                log.info("COMMIT: %s", subj)
+        elif exit_code == 0:
+            log.info("RESULT: no commits")
         return exit_code
     finally:
         lock.release()

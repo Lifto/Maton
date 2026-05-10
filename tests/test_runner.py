@@ -1,6 +1,7 @@
 """Tests for maton hitch runner."""
 
 import contextlib
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -8,6 +9,7 @@ from unittest.mock import patch
 import yaml
 
 from maton.hitch.runner import (
+    _count_ready,
     assemble_prompt,
     check_cooldown,
     check_quiet_hours,
@@ -247,6 +249,55 @@ def test_run_skips_on_quiet_hours(mock_invoke, tmp_path: Path) -> None:
     result = run(instance, hitch, model="test/model")
     assert result == 0
     mock_invoke.assert_not_called()
+
+
+def test_count_ready_empty() -> None:
+    """Empty backlog and schedule yields (0, 0)."""
+    state = {"backlog": "tasks: []\n", "schedule": "recurring: []\n"}
+    assert _count_ready(state) == (0, 0)
+
+
+def test_count_ready_with_tasks_and_schedules() -> None:
+    """Counts ready tasks and due schedules independently."""
+    backlog = yaml.dump({"tasks": [{"status": "ready"}, {"status": "done"}, {"status": "ready", "blocked_by": ["x"]}]})
+    schedule = yaml.dump({"recurring": [{"enabled": True, "frequency": "daily", "last_run": None}]})
+    state = {"backlog": backlog, "schedule": schedule}
+    ready, due = _count_ready(state)
+    assert ready == 1
+    assert due == 1
+
+
+@patch("maton.hitch.runner._invoke", return_value=0)
+def test_run_logs_state_summary(mock_invoke, tmp_path: Path, caplog) -> None:
+    """run() logs ready task and due schedule counts before dispatch."""
+    from maton.hitch.runner import run
+
+    instance = _make_instance(tmp_path)
+    backlog = yaml.dump({"tasks": [{"status": "ready"}]})
+    (instance / "backlog.yaml").write_text(backlog)
+    hitch = tmp_path / "hitch"
+    hitch.mkdir()
+
+    with caplog.at_level(logging.INFO):
+        run(instance, hitch, model="test/model")
+    assert any("STATE: 1 ready task(s)" in m for m in caplog.messages)
+
+
+@patch("maton.hitch.runner._invoke", return_value=0)
+def test_run_logs_duration(mock_invoke, tmp_path: Path, caplog) -> None:
+    """run() logs wall-clock duration in the END message."""
+    from maton.hitch.runner import run
+
+    instance = _make_instance(tmp_path)
+    hitch = tmp_path / "hitch"
+    hitch.mkdir()
+
+    with caplog.at_level(logging.INFO):
+        run(instance, hitch, model="test/model")
+    end_msgs = [m for m in caplog.messages if m.startswith("END:")]
+    assert len(end_msgs) == 1
+    assert "exit 0" in end_msgs[0]
+    assert "s)" in end_msgs[0]
 
 
 @patch("maton.hitch.runner._invoke", return_value=0)
