@@ -17,11 +17,17 @@ pip install maton
 ## Quick Start
 
 ```bash
-# Create a maton
-maton init my-maton
+# Create a maton instance
+maton init
 
-# Ask it something
-maton ask my-maton "what's your name?"
+# Edit the hitch config — set your model
+nano ~/.maton/matons/maton-*/hitch/config.yaml
+
+# Install platform scheduling (launchd on macOS, systemd on Linux)
+maton hitch install ~/.maton/matons/maton-YYYYMMDD-HHMMSS
+
+# Remove scheduling cleanly when done
+maton hitch uninstall ~/.maton/matons/maton-YYYYMMDD-HHMMSS
 ```
 
 ## How It Works
@@ -29,7 +35,11 @@ maton ask my-maton "what's your name?"
 A maton is a git repository. Its state is its files. Every change is a commit.
 Point an LLM at it and it can read itself, understand itself, and act.
 
+The **hitch** is the scheduling layer. It runs a dispatch cycle on a timer:
+guards (cooldown, quiet hours, lock) → route (backlog tasks or ideation) → assemble prompt with inline state → invoke the LLM driver.
+
 ## Requirements
 
 - Python 3.12+
-- An OpenAI-compatible LLM endpoint (e.g., [oMLX](https://github.com/jundot/omlx) for local inference)
+- An OpenAI-compatible LLM endpoint
+- An LLM driver ([OpenCode](https://github.com/nicepkg/opencode) or similar)
