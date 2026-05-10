@@ -53,13 +53,15 @@ Maton/
         schedule.yaml   # recurring tasks
         backlog.yaml    # task queue
         skills/
-          dispatch.md   # dispatcher skill
+          dispatch-task.md      # execute one backlog task
+          dispatch-schedule.md  # execute one scheduled task
+          dispatch-maintenance.md  # self-maintenance checks
           ideate.md     # idle-brain ideation skill
           update.md     # seed update skill
           perpetual-loop.md  # architecture reference
       hitch/            # scheduling infrastructure (not copied to instances)
         __init__.py
-        runner.py       # dispatch cycle: guards → route → assemble prompt → invoke LLM
+        runner.py       # dispatch cycle: route → assemble prompt → invoke LLM (4-way routing: schedule→task→maintenance→ideate)
         platform.py     # launchd/systemd install/uninstall
   tests/           # pytest
 ```
@@ -148,7 +150,9 @@ It contains only seed files — no Python package code.
 │   └── config.yaml    (model, timeout — edit before hitch install)
 ├── logs/              (git-ignored)
 └── skills/
-    ├── dispatch.md
+    ├── dispatch-task.md
+    ├── dispatch-schedule.md
+    ├── dispatch-maintenance.md
     ├── ideate.md
     ├── update.md
     └── perpetual-loop.md
