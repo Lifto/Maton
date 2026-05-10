@@ -150,7 +150,7 @@ def test_assemble_prompt_dispatch_task_filters_state() -> None:
     prompt = assemble_prompt("dispatch-task", "# Dispatch Task\n", state, task_ctx)
     assert "# Dispatch Task" in prompt
     assert "--- CURRENT STATE ---" in prompt
-    assert "=== TASK ===" in prompt
+    assert "--- TASK ---" in prompt
     assert "task-001" in prompt
     assert "=== GUARDRAILS" in prompt
     assert "=== USER" in prompt
@@ -238,6 +238,14 @@ def test_needs_maintenance_false_when_clean(tmp_path: Path) -> None:
     instance.mkdir()
     (instance / ".git").mkdir()
     assert _needs_maintenance(instance) is False
+
+
+def test_needs_maintenance_detects_in_progress_task(tmp_path: Path) -> None:
+    """_needs_maintenance returns True when any backlog task has status: in_progress."""
+    instance = _make_instance(tmp_path)
+    backlog = yaml.dump({"tasks": [{"id": "t1", "status": "in_progress", "summary": "Doing something"}]})
+    state = {"backlog": backlog, "schedule": "recurring: []\n", "guardrails": "", "identity": "", "user": ""}
+    assert _needs_maintenance(instance, state) is True
 
 
 def test_select_skill_routes_to_schedule_first(tmp_path: Path) -> None:

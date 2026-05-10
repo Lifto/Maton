@@ -115,7 +115,7 @@ def _find_ready_task(state: dict[str, str]) -> dict[str, Any] | None:
     return min(tasks, key=lambda t: (_PRIORITY_ORDER.get(t.get("priority", "normal"), 2), t.get("created", "")))
 
 
-def _needs_maintenance(instance_dir: Path) -> bool:
+def _needs_maintenance(instance_dir: Path, state: dict[str, str] | None = None) -> bool:
     """Return True if the instance needs maintenance attention."""
     if (instance_dir / ".git" / "index.lock").exists():
         return True
@@ -126,6 +126,14 @@ def _needs_maintenance(instance_dir: Path) -> bool:
             mtime = entries[-1].stat().st_mtime
             if (time.time() - mtime) > 48 * 3600:
                 return True
+    if state is not None:
+        try:
+            backlog = yaml.safe_load(state.get("backlog", "")) or {}
+            tasks = backlog.get("tasks") or []
+            if any(t.get("status") == "in_progress" for t in tasks):
+                return True
+        except yaml.YAMLError:
+            pass
     return False
 
 
@@ -154,7 +162,7 @@ def select_skill(instance_dir: Path, state: dict[str, str]) -> tuple[str, str, d
     if ready is not None:
         return ("dispatch-task", (skills_dir / "dispatch-task.md").read_text(), ready)
 
-    if _needs_maintenance(instance_dir):
+    if _needs_maintenance(instance_dir, state):
         return ("dispatch-maintenance", (skills_dir / "dispatch-maintenance.md").read_text(), {})
 
     return ("ideate", (skills_dir / "ideate.md").read_text(), {})
@@ -167,10 +175,12 @@ def assemble_prompt(
     task_context: dict[str, Any] | None = None,
 ) -> str:
     """Combine skill instructions with filtered inline state for the LLM."""
-    parts = [skill_content, "\n\n--- CURRENT STATE ---\n"]
+    parts = [skill_content]
 
     if task_context:
-        parts.append(f"\n=== TASK ===\n{yaml.dump(task_context, default_flow_style=False)}")
+        parts.append(f"\n\n--- TASK ---\n{yaml.dump(task_context, default_flow_style=False)}")
+
+    parts.append("\n\n--- CURRENT STATE ---\n")
 
     if skill_name == "dispatch-task":
         parts.append(f"\n=== GUARDRAILS (guardrails.yaml) ===\n{state['guardrails']}")
