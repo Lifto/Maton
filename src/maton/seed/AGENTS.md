@@ -30,6 +30,7 @@ You provide all capabilities: file operations, git, task management. The maton's
 | `backlog.yaml` | Task queue — the maton's to-do list |
 | `journal/` | Summarized learnings — tracked in git |
 | `logs/` | Raw session transcripts — git-ignored, ephemeral |
+| `hitch/` | Scheduling config and runtime files — git-ignored |
 | `skills/` | Reusable skill files the maton can load |
 | `AGENTS.md` | This file — driver bootstrap |
 

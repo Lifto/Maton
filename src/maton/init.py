@@ -5,7 +5,14 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
+import yaml
+
 DEFAULT_BASE_DIR = Path.home() / ".maton" / "matons"
+
+_DEFAULT_HITCH_CONFIG = {
+    "model": "",
+    "timeout": 300,
+}
 
 
 def create_maton(base_dir: Path | None = None) -> Path:
@@ -23,7 +30,6 @@ def create_maton(base_dir: Path | None = None) -> Path:
 
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    # Timestamp-based directory name
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     instance_name = f"maton-{timestamp}"
     instance_path = base_dir / instance_name
@@ -31,18 +37,18 @@ def create_maton(base_dir: Path | None = None) -> Path:
     seed_path = Path(__file__).parent / "seed"
     shutil.copytree(seed_path, instance_path)
 
-    # Create journal/ with .gitkeep (so git tracks the directory)
     journal_dir = instance_path / "journal"
     journal_dir.mkdir(exist_ok=True)
     (journal_dir / ".gitkeep").touch()
 
-    # Create logs/ directory (git-ignored)
     (instance_path / "logs").mkdir(exist_ok=True)
 
-    # Write .gitignore
-    (instance_path / ".gitignore").write_text("logs/\n__pycache__/\nrepos/\n")
+    hitch_dir = instance_path / "hitch"
+    hitch_dir.mkdir(exist_ok=True)
+    (hitch_dir / "config.yaml").write_text(yaml.dump(_DEFAULT_HITCH_CONFIG, default_flow_style=False))
 
-    # Initialize git repo
+    (instance_path / ".gitignore").write_text("logs/\nhitch/\n__pycache__/\nrepos/\n")
+
     git = shutil.which("git") or "git"
     subprocess.run([git, "init"], cwd=str(instance_path), check=True, capture_output=True)  # noqa: S603
     subprocess.run([git, "add", "."], cwd=str(instance_path), check=True, capture_output=True)  # noqa: S603

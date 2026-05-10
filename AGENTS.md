@@ -8,7 +8,7 @@ After any code change, verify that this file is still accurate. Update it in the
 
 ## Project Status
 
-Early stage — CLI (`init`, `ask`), packaged `Maton.md` template, and tests are in place.
+Early stage — CLI (`init`, `ask`, `hitch install/uninstall`), packaged `Maton.md` template, hitch runner, and tests are in place.
 
 ## Build & Run
 
@@ -16,6 +16,8 @@ Early stage — CLI (`init`, `ask`), packaged `Maton.md` template, and tests are
 uv sync                  # install deps
 uv run pytest            # run tests
 uv run maton init        # create a new maton instance
+uv run maton hitch install <instance-dir>   # install platform scheduling
+uv run maton hitch uninstall <instance-dir> # remove platform scheduling
 ```
 
 ## Running Tests
@@ -57,6 +59,8 @@ Maton/
           perpetual-loop.md  # architecture reference
       hitch/            # scheduling infrastructure (not copied to instances)
         __init__.py
+        runner.py       # dispatch cycle: guards → route → assemble prompt → invoke LLM
+        platform.py     # launchd/systemd install/uninstall
   tests/           # pytest
 ```
 
@@ -140,6 +144,8 @@ It contains only seed files — no Python package code.
 ├── backlog.yaml
 ├── journal/
 │   └── .gitkeep
+├── hitch/             (git-ignored, created by init)
+│   └── config.yaml    (model, timeout — edit before hitch install)
 ├── logs/              (git-ignored)
 └── skills/
     ├── dispatch.md

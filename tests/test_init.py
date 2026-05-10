@@ -71,13 +71,32 @@ def test_create_maton_excludes_python_package_files(tmp_path: Path) -> None:
     assert not (result / "__init__.py").exists()
 
 
+def test_create_maton_creates_hitch_dir(tmp_path: Path) -> None:
+    """hitch/ directory exists with config.yaml."""
+    result = create_maton(base_dir=tmp_path)
+    assert (result / "hitch").is_dir()
+    assert (result / "hitch" / "config.yaml").is_file()
+
+
+def test_create_maton_hitch_config_has_defaults(tmp_path: Path) -> None:
+    """hitch/config.yaml contains model and timeout keys."""
+    import yaml
+
+    result = create_maton(base_dir=tmp_path)
+    config = yaml.safe_load((result / "hitch" / "config.yaml").read_text())
+    assert "model" in config
+    assert "timeout" in config
+    assert config["timeout"] == 300
+
+
 def test_create_maton_creates_gitignore(tmp_path: Path) -> None:
-    """.gitignore is present and contains logs/ and __pycache__/."""
+    """.gitignore is present and contains logs/, hitch/, and __pycache__/."""
     result = create_maton(base_dir=tmp_path)
     gitignore = result / ".gitignore"
     assert gitignore.is_file()
     content = gitignore.read_text()
     assert "logs/" in content
+    assert "hitch/" in content
     assert "__pycache__/" in content
 
 
