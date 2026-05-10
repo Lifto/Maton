@@ -6,18 +6,7 @@ You have been invoked by `dispatch.md` because there is nothing to do. Your job:
 
 You propose. You do not execute. Every idea becomes a backlog item.
 
----
-
-## Before You Ideate
-
-Read and internalize:
-
-1. **`self.md`** — who are you? what's your purpose?
-2. **`user.md`** — who is your user? what do you know about them? what DON'T you know?
-3. **`backlog.yaml`** — what's already there? (done, cancelled, blocked items are still informative)
-4. **`schedule.yaml`** — what recurring tasks already exist?
-5. **`journal/`** — recent entries. What have you been doing? What patterns do you see?
-6. **`guardrails.yaml`** — what are you allowed to do? (don't propose things you can't do)
+You have already read the state files (self.md, user.md, backlog.yaml, schedule.yaml, guardrails.yaml) in the dispatch cycle. Also review recent `journal/` entries for patterns.
 
 ---
 
@@ -47,52 +36,20 @@ If `user.md` is well-populated, check: has anything likely changed? People's pri
 
 ### Phase 2: Know your environment
 
-Discover what's available on this machine. Create backlog tasks to research:
+If `knowledge/` lacks recent environment info, create tasks to survey:
 
-**Communication channels** — how can you reach the user?
+- **Communication channels**: installed apps (Messages, Slack, etc.), CLI tools (`osascript`, `terminal-notifier`), notification mechanisms. Goal: find the best way to reach the user.
+- **Platform capabilities**: OS, shell, package managers, dev tools, repos from `guardrails.yaml`.
 
-- Check installed apps: Messages, Mail, Reminders, Notes, Discord, Slack, Teams
-- Check CLI tools: `osascript` (macOS scripting), mail CLIs, webhook tools
-- Check for notification mechanisms: `osascript -e 'display notification'`, `terminal-notifier`, etc.
-- The goal: propose the best way to send the user a message or reminder
-- Task: "Research available communication channels on this system. Update `knowledge/` with findings."
-
-**Platform capabilities** — what can you do here?
-
-- What OS? What shell? What package managers?
-- What dev tools are installed? (git, python, node, docker, etc.)
-- What repos does the user work on? (check `guardrails.yaml` writable repos)
-- Task: "Survey platform capabilities and update `knowledge/` with an inventory."
-
-**Skip this phase** if `knowledge/` already has recent, complete environment info.
+Skip if `knowledge/` already has this.
 
 ### Phase 3: Default operations
 
 Check if these recurring tasks exist in `schedule.yaml`. If not, propose adding them:
 
-**Daily brief** — a morning summary for the user. Could include:
-
-- Weather and calendar (if accessible)
-- Status of watched repos (open PRs, CI status, new issues)
-- Backlog summary (what's done, what's next, what's blocked)
-- Any scheduled tasks due today
-- Task: "Create a daily brief skill (`skills/daily-brief.md`) and add it to `schedule.yaml`."
-
-**Weekly review** — a deeper reflection:
-
-- What got done this week?
-- What's been blocked and why?
-- Are priorities still right?
-- Any backlog items that should be cancelled?
-- Task: "Create a weekly review skill (`skills/weekly-review.md`) and add it to `schedule.yaml`."
-
-**Repo health** — for each writable repo in guardrails:
-
-- Any stale branches?
-- Dependency updates available?
-- Open TODOs in code?
-- CI passing?
-- Task: "Check health of [repo name] and report findings in journal."
+- **Daily brief**: morning summary — repo status (PRs, CI), backlog state, scheduled tasks due today. Skill: `skills/daily-brief.md`.
+- **Weekly review**: what got done, what's blocked, are priorities still right, any backlog items to cancel. Skill: `skills/weekly-review.md`.
+- **Repo health**: per writable repo — stale branches, dependency updates, open TODOs, CI status.
 
 ### Phase 4: Proactive value
 
@@ -155,11 +112,3 @@ But frontload: put the most impactful ideas first. If you have 10 ideas, the fir
 ```bash
 touch ~/.maton/hitch/trigger
 ```
-
----
-
-## The Meta-Goal
-
-You exist to make the maton useful. A maton with an empty backlog is a maton that isn't helping anyone. Your job is to fix that — not by inventing busywork, but by figuring out what genuinely needs doing.
-
-The best ideas come from understanding the user. If you don't understand the user yet, that IS the task.

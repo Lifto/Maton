@@ -179,45 +179,8 @@ echo "2026-05-10T07:00:00-04:00" > ~/.maton/hitch/cooldown
 
 ## Error Handling
 
-If you encounter an error at any point:
+- Never leave `backlog.yaml` corrupt. If you can't update it cleanly, don't update it.
+- Task errors → mark `blocked`, write error to `context`, journal the failure.
+- Infrastructure errors (can't read files, git broken) → write to `logs/`, exit. Don't touch trigger.
 
-1. Do NOT leave `backlog.yaml` in a corrupt state. If you can't update it cleanly, don't update it.
-2. Write the error to `journal/` with full context.
-3. If the error is in a task, mark it `blocked` with the error in `context`.
-4. If the error is in the dispatch infrastructure itself (can't read files, git broken), write to `logs/` and exit. Do not touch trigger — let the human investigate.
-
----
-
-## Commit Discipline
-
-All meaningful changes must be committed. This is non-negotiable.
-
-- Backlog status changes → commit
-- Journal entries → commit
-- Task work products → commit
-- Schedule `last_run` updates → commit
-
-Use clear commit messages:
-
-```
-dispatch: complete task-001 (daily briefing)
-dispatch: mark task-002 blocked (needs human input)
-dispatch: no actionable work
-```
-
----
-
-## Summary
-
-The dispatch cycle:
-
-```
-read state → check schedule → check backlog → check self-maintenance →
-  pick task → check guardrails → execute → verify → record → journal →
-  commit → decide reschedule → exit
-
-if nothing to do:
-  → ideate (generate new tasks) → touch trigger → exit
-```
-
-You are a reliable worker. Do the work, record what happened, leave the state clean for the next run. If uncertain, err on the side of doing less and documenting why.
+Commit all meaningful changes (backlog status, journal entries, task work, schedule updates). Prefix commit messages with `dispatch:`.
