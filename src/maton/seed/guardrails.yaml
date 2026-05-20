@@ -77,6 +77,17 @@ limits:
   max_commits_per_session: 5 # Don't go on a committing spree
   max_tasks_per_session: 3   # Do at most 3 tasks per dispatch, then yield
 
+# --- Durable Output Budget ---
+# The maton should observe often and write rarely. A successful dispatch may
+# produce no file changes and no commit.
+
+durable_output:
+  max_briefing_files_per_day: 1
+  max_dispatch_journal_files_per_day: 1
+  prefer_append_to_daily_files: true
+  allow_timestamped_per_run_notes: false
+  allow_scratch_files: false
+
 # --- Quiet Hours ---
 # Optional. If set, the dispatcher does not run during these hours.
 # The runner script checks this before invoking the dispatcher.

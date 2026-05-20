@@ -9,6 +9,7 @@ from unittest.mock import patch
 import yaml
 
 from maton.hitch.runner import (
+    DriverSpec,
     _count_ready,
     _find_due_schedule,
     _find_ready_task,
@@ -16,6 +17,7 @@ from maton.hitch.runner import (
     assemble_prompt,
     has_ready_work,
     load_state,
+    parse_driver,
     select_skill,
 )
 
@@ -137,6 +139,17 @@ def test_select_skill_routes_to_ideate_when_no_work(tmp_path: Path) -> None:
     assert ctx == {}
 
 
+def test_select_skill_routes_to_stewardship_when_available(tmp_path: Path) -> None:
+    """Selects stewardship-pulse instead of ideate when the skill exists."""
+    instance = _make_instance(tmp_path)
+    (instance / "skills" / "stewardship-pulse.md").write_text("# Stewardship Pulse\n")
+    state = load_state(instance)
+    name, content, ctx = select_skill(instance, state)
+    assert name == "stewardship-pulse"
+    assert "Stewardship Pulse" in content
+    assert ctx == {}
+
+
 def test_assemble_prompt_dispatch_task_filters_state() -> None:
     """dispatch-task prompt includes guardrails and user, not backlog or schedule."""
     state = {
@@ -174,6 +187,33 @@ def test_assemble_prompt_ideate_filters_state() -> None:
     assert "=== IDENTITY" in prompt
     assert "=== GUARDRAILS" not in prompt
     assert "=== SCHEDULE" not in prompt
+
+
+def test_assemble_prompt_stewardship_includes_core_state() -> None:
+    """stewardship-pulse prompt includes the state needed for general routing."""
+    state = {
+        "backlog": "tasks: []",
+        "schedule": "recurring: []",
+        "guardrails": "limits: {}",
+        "identity": "I am maton",
+        "user": "My human",
+    }
+    prompt = assemble_prompt("stewardship-pulse", "# Stewardship\n", state)
+    assert "=== BACKLOG" in prompt
+    assert "=== SCHEDULE" in prompt
+    assert "=== GUARDRAILS" in prompt
+    assert "=== IDENTITY" in prompt
+    assert "=== USER" in prompt
+
+
+def test_parse_driver_with_model() -> None:
+    """Driver specs can include a model after a colon."""
+    assert parse_driver("opencode:drone/Qwen3") == DriverSpec("opencode", "drone/Qwen3")
+
+
+def test_parse_driver_without_model() -> None:
+    """Driver specs can omit a model."""
+    assert parse_driver("codex") == DriverSpec("codex", None)
 
 
 def test_find_due_schedule_returns_first_due(tmp_path: Path) -> None:
@@ -323,10 +363,12 @@ def test_run_logs_duration(mock_invoke, tmp_path: Path, caplog) -> None:
 
 @patch("maton.hitch.runner._invoke", return_value=0)
 def test_run_re_arms_trigger_after_dispatch(mock_invoke, tmp_path: Path) -> None:
-    """run() re-creates trigger after dispatch to keep the perpetual loop running."""
+    """run() re-creates trigger when work remains ready after dispatch."""
     from maton.hitch.runner import run
 
     instance = _make_instance(tmp_path)
+    backlog = yaml.dump({"tasks": [{"status": "ready"}]})
+    (instance / "backlog.yaml").write_text(backlog)
     hitch = tmp_path / "hitch"
     hitch.mkdir()
     (hitch / "trigger").touch()
@@ -336,6 +378,36 @@ def test_run_re_arms_trigger_after_dispatch(mock_invoke, tmp_path: Path) -> None
     assert (hitch / "trigger").exists()
     assert not (hitch / "lock").exists()
     mock_invoke.assert_called_once()
+
+
+@patch("maton.hitch.runner._invoke", return_value=0)
+def test_run_does_not_rearm_trigger_when_no_work(mock_invoke, tmp_path: Path) -> None:
+    """run() leaves the trigger absent when no work remains."""
+    from maton.hitch.runner import run
+
+    instance = _make_instance(tmp_path)
+    hitch = tmp_path / "hitch"
+    hitch.mkdir()
+    (hitch / "trigger").touch()
+
+    result = run(instance, hitch, model="test/model")
+    assert result == 0
+    assert not (hitch / "trigger").exists()
+
+
+@patch("maton.hitch.runner._invoke_driver", return_value=0)
+def test_run_invokes_configured_drivers(mock_invoke_driver, tmp_path: Path) -> None:
+    """run() invokes each configured driver in order."""
+    from maton.hitch.runner import run
+
+    instance = _make_instance(tmp_path)
+    hitch = tmp_path / "hitch"
+    hitch.mkdir()
+    drivers = [DriverSpec("opencode", "test/model"), DriverSpec("codex")]
+
+    result = run(instance, hitch, model="", drivers=drivers)
+    assert result == 0
+    assert [call.args[2] for call in mock_invoke_driver.call_args_list] == drivers
 
 
 @patch("maton.hitch.runner._invoke", return_value=0)
