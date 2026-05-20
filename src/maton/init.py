@@ -11,6 +11,15 @@ DEFAULT_BASE_DIR = Path.home() / ".maton" / "matons"
 
 _DEFAULT_HITCH_CONFIG = {
     "model": "",
+    "drivers": [
+        {
+            "name": "opencode",
+            "model": "",
+        },
+        {
+            "name": "codex",
+        },
+    ],
     "timeout": 300,
 }
 

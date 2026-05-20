@@ -36,7 +36,9 @@ A maton is a git repository. Its state is its files. Every change is a commit.
 Point an LLM at it and it can read itself, understand itself, and act.
 
 The **hitch** is the scheduling layer. It runs a dispatch cycle on a timer:
-guards (cooldown, quiet hours, lock) → route (backlog tasks or ideation) → assemble prompt with inline state → invoke the LLM driver.
+guards (lock) → route (schedule, backlog, maintenance, or stewardship pulse) → assemble prompt with inline state → invoke the configured LLM driver or drivers.
+
+Driver/model settings are read from each instance's `hitch/config.yaml` at runtime, so config edits are picked up on restart without reinstalling scheduler units.
 
 ## Requirements
 

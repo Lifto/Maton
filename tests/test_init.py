@@ -81,12 +81,13 @@ def test_create_maton_creates_hitch_dir(tmp_path: Path) -> None:
 
 
 def test_create_maton_hitch_config_has_defaults(tmp_path: Path) -> None:
-    """hitch/config.yaml contains model and timeout keys."""
+    """hitch/config.yaml contains model, drivers, and timeout defaults."""
     import yaml
 
     result = create_maton(base_dir=tmp_path)
     config = yaml.safe_load((result / "hitch" / "config.yaml").read_text())
     assert "model" in config
+    assert "drivers" in config
     assert "timeout" in config
     assert config["timeout"] == 300
 

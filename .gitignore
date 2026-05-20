@@ -208,3 +208,6 @@ __marimo__/
 
 # Sisyphus agent state
 .sisyphus/
+
+# Local hitch runtime config (use config.example.yaml as template)
+src/maton/hitch/config.yaml
