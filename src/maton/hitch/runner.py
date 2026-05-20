@@ -11,12 +11,9 @@ import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any, TextIO
 
 import yaml
-
-if TYPE_CHECKING:
-    from typing import Any, TextIO
 
 log = logging.getLogger(__name__)
 

@@ -7,12 +7,9 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any
 
 import yaml
-
-if TYPE_CHECKING:
-    from typing import Any
 
 
 def _service_name(instance_dir: Path) -> str:
@@ -53,6 +50,8 @@ def _launchd_plist(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) 
     model = config.get("model", "")
     timeout = config.get("timeout", 300)
     trigger_path = str(hitch_dir / "trigger")
+    model_args = _model_args(model)
+    driver_args = _driver_args(config)
 
     return textwrap.dedent(f"""\
         <?xml version="1.0" encoding="UTF-8"?>
@@ -69,8 +68,8 @@ def _launchd_plist(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) 
                 <string>{instance_dir}</string>
                 <string>--hitch-dir</string>
                 <string>{hitch_dir}</string>
-                <string>--model</string>
-                <string>{model}</string>
+{model_args}
+{driver_args}
                 <string>--timeout</string>
                 <string>{timeout}</string>
             </array>
@@ -94,8 +93,59 @@ def _launchd_plist(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) 
     """)
 
 
+def _model_args(model: str) -> str:
+    """Return launchd XML arguments for the legacy model option."""
+    if not model:
+        return ""
+    return f"                <string>--model</string>\n                <string>{model}</string>"
+
+
+def _driver_spec(driver: dict[str, Any]) -> str:
+    """Return a CLI driver spec from hitch config."""
+    name = driver.get("name") or driver.get("type")
+    if not name:
+        msg = "Each driver needs a name"
+        raise ValueError(msg)
+    model = driver.get("model")
+    return f"{name}:{model}" if model else str(name)
+
+
+def _driver_args(config: dict[str, Any]) -> str:
+    """Return launchd XML arguments for configured drivers."""
+    drivers = config.get("drivers") or []
+    if not drivers:
+        return ""
+    lines: list[str] = []
+    for driver in drivers:
+        spec = _driver_spec(driver)
+        lines.append("                <string>--driver</string>")
+        lines.append(f"                <string>{spec}</string>")
+    return "\n".join(lines)
+
+
+def _systemd_driver_args(config: dict[str, Any]) -> str:
+    """Return systemd command-line arguments for configured drivers."""
+    drivers = config.get("drivers") or []
+    if not drivers:
+        return ""
+    return " ".join(f"--driver {_driver_spec(driver)}" for driver in drivers)
+
+
 def _launchd_plist_path(instance_dir: Path) -> Path:
     return Path.home() / "Library" / "LaunchAgents" / f"{_service_name(instance_dir)}.plist"
+
+
+def _validate_config_for_install(config: dict[str, Any]) -> None:
+    """Validate that hitch config can produce at least one runnable driver."""
+    drivers = config.get("drivers") or []
+    if not config.get("model") and not drivers:
+        msg = "Set 'model' or 'drivers' in hitch/config.yaml before installing"
+        raise ValueError(msg)
+    for driver in drivers:
+        name = driver.get("name") or driver.get("type")
+        if name == "opencode" and not driver.get("model"):
+            msg = "OpenCode driver needs a model in hitch/config.yaml before installing"
+            raise ValueError(msg)
 
 
 def install_launchd(instance_dir: Path, hitch_dir: Path) -> Path:
@@ -105,9 +155,7 @@ def install_launchd(instance_dir: Path, hitch_dir: Path) -> Path:
         Path to the installed plist file.
     """
     config = _load_config(hitch_dir)
-    if not config.get("model"):
-        msg = "Set 'model' in hitch/config.yaml before installing"
-        raise ValueError(msg)
+    _validate_config_for_install(config)
 
     plist_content = _launchd_plist(instance_dir, hitch_dir, config)
     plist_path = _launchd_plist_path(instance_dir)
@@ -150,6 +198,9 @@ def _systemd_unit(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) -
     binary = _hitch_binary()
     model = config.get("model", "")
     timeout = config.get("timeout", 300)
+    model_line = f" \\\n            --model {model}" if model else ""
+    driver_args = _systemd_driver_args(config)
+    driver_line = f" \\\n            {driver_args}" if driver_args else ""
 
     return textwrap.dedent(f"""\
         [Unit]
@@ -159,8 +210,7 @@ def _systemd_unit(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) -
         Type=oneshot
         ExecStart={binary} \\
             --instance-dir {instance_dir} \\
-            --hitch-dir {hitch_dir} \\
-            --model {model} \\
+            --hitch-dir {hitch_dir}{model_line}{driver_line} \\
             --timeout {timeout}
 
         [Install]
@@ -198,9 +248,7 @@ def install_systemd(instance_dir: Path, hitch_dir: Path) -> Path:
         Path to the installed service file.
     """
     config = _load_config(hitch_dir)
-    if not config.get("model"):
-        msg = "Set 'model' in hitch/config.yaml before installing"
-        raise ValueError(msg)
+    _validate_config_for_install(config)
 
     unit_name = _systemd_service_name(instance_dir)
     unit_dir = _systemd_dir()
