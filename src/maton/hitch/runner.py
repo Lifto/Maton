@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,6 +29,20 @@ _STATE_FILES = {
 }
 
 _FREQ_SECONDS = {"hourly": 3600, "daily": 86400, "weekly": 604800}
+
+
+@dataclass(frozen=True)
+class DriverSpec:
+    """A non-interactive agent driver the hitch can invoke."""
+
+    name: str
+    model: str | None = None
+
+
+def parse_driver(raw: str) -> DriverSpec:
+    """Parse a CLI driver spec such as 'opencode:model' or 'codex'."""
+    name, sep, model = raw.partition(":")
+    return DriverSpec(name=name.strip(), model=model.strip() if sep and model.strip() else None)
 
 
 def load_state(instance_dir: Path) -> dict[str, str]:
@@ -165,6 +180,10 @@ def select_skill(instance_dir: Path, state: dict[str, str]) -> tuple[str, str, d
     if _needs_maintenance(instance_dir, state):
         return ("dispatch-maintenance", (skills_dir / "dispatch-maintenance.md").read_text(), {})
 
+    stewardship = skills_dir / "stewardship-pulse.md"
+    if stewardship.exists():
+        return ("stewardship-pulse", stewardship.read_text(), {})
+
     return ("ideate", (skills_dir / "ideate.md").read_text(), {})
 
 
@@ -189,7 +208,7 @@ def assemble_prompt(
         parts.append(f"\n=== GUARDRAILS (guardrails.yaml) ===\n{state['guardrails']}")
         parts.append(f"\n=== SCHEDULE (schedule.yaml) ===\n{state['schedule']}")
         parts.append(f"\n=== USER (user.md) ===\n{state['user']}")
-    elif skill_name == "dispatch-maintenance":
+    elif skill_name in {"dispatch-maintenance", "stewardship-pulse"}:
         parts.append(f"\n=== BACKLOG (backlog.yaml) ===\n{state['backlog']}")
         parts.append(f"\n=== SCHEDULE (schedule.yaml) ===\n{state['schedule']}")
         parts.append(f"\n=== GUARDRAILS (guardrails.yaml) ===\n{state['guardrails']}")
@@ -255,19 +274,9 @@ def _commit_subjects(instance_dir: Path, since: str) -> list[str]:
     return [line for line in result.stdout.strip().splitlines() if line]
 
 
-def _invoke(instance_dir: Path, prompt: str, model: str, timeout: int) -> int:
-    """Invoke the LLM driver and return its exit code."""
-    cmd = [
-        "opencode",
-        "run",
-        "--dir",
-        str(instance_dir),
-        "-m",
-        model,
-        "--dangerously-skip-permissions",
-        prompt,
-    ]
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)  # noqa: S603, S607
+def _run_command(cmd: list[str], timeout: int) -> int:
+    """Run a driver command and return its exit code."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)  # noqa: S603
     try:
         _, stderr_bytes = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -287,11 +296,65 @@ def _invoke(instance_dir: Path, prompt: str, model: str, timeout: int) -> int:
     return proc.returncode
 
 
+def _invoke_opencode(instance_dir: Path, prompt: str, model: str, timeout: int) -> int:
+    """Invoke OpenCode non-interactively."""
+    if not model:
+        msg = "OpenCode driver requires a model"
+        raise ValueError(msg)
+    cmd = [
+        "opencode",
+        "run",
+        "--dir",
+        str(instance_dir),
+        "-m",
+        model,
+        "--dangerously-skip-permissions",
+        prompt,
+    ]
+    return _run_command(cmd, timeout)
+
+
+def _invoke_codex(instance_dir: Path, prompt: str, model: str | None, timeout: int) -> int:
+    """Invoke Codex non-interactively."""
+    cmd = [
+        "codex",
+        "exec",
+        "--ephemeral",
+        "--skip-git-repo-check",
+        "--ask-for-approval",
+        "never",
+        "-s",
+        "workspace-write",
+        "-C",
+        str(instance_dir),
+    ]
+    if model:
+        cmd.extend(["-m", model])
+    cmd.append(prompt)
+    return _run_command(cmd, timeout)
+
+
+def _invoke_driver(instance_dir: Path, prompt: str, driver: DriverSpec, timeout: int) -> int:
+    """Invoke one configured driver and return its exit code."""
+    if driver.name == "opencode":
+        return _invoke_opencode(instance_dir, prompt, driver.model or "", timeout)
+    if driver.name == "codex":
+        return _invoke_codex(instance_dir, prompt, driver.model, timeout)
+    msg = f"Unknown driver: {driver.name}"
+    raise ValueError(msg)
+
+
+def _invoke(instance_dir: Path, prompt: str, model: str, timeout: int) -> int:
+    """Invoke the default OpenCode driver and return its exit code."""
+    return _invoke_driver(instance_dir, prompt, DriverSpec("opencode", model), timeout)
+
+
 def run(
     instance_dir: Path,
     hitch_dir: Path,
     model: str,
     timeout: int = 300,
+    drivers: list[DriverSpec] | None = None,
 ) -> int:
     """Execute one dispatch cycle.
 
@@ -308,48 +371,60 @@ def run(
     Returns:
         0 on success or skip, negative on timeout, positive on LLM error.
     """
-    state = load_state(instance_dir)
-
     lock = _Lock(hitch_dir / "lock")
     if not lock.acquire():
         log.info("SKIP: already running")
         return 0
 
+    rearm_trigger = False
+    index_lock = instance_dir / ".git" / "index.lock"
     try:
         (hitch_dir / "trigger").unlink(missing_ok=True)
+        driver_specs = drivers or [DriverSpec("opencode", model)]
+        last_exit_code = 0
 
-        ready, due = _count_ready(state)
-        log.info("STATE: %d ready task(s), %d due schedule(s)", ready, due)
+        for driver in driver_specs:
+            state = load_state(instance_dir)
+            ready, due = _count_ready(state)
+            log.info("STATE: %d ready task(s), %d due schedule(s)", ready, due)
 
-        skill_name, skill_content, task_context = select_skill(instance_dir, state)
-        log.info("START: %s", skill_name)
+            skill_name, skill_content, task_context = select_skill(instance_dir, state)
+            label = f"{driver.name}:{skill_name}" if len(driver_specs) > 1 else skill_name
+            log.info("START: %s", label)
 
-        prompt = assemble_prompt(skill_name, skill_content, state, task_context)
-        index_lock = instance_dir / ".git" / "index.lock"
-        if index_lock.exists():
-            log.info("GIT_LOCK: removed stale index.lock")
-            index_lock.unlink(missing_ok=True)
-        head_before = _git_head(instance_dir)
-        t0 = time.monotonic()
-        exit_code = _invoke(instance_dir, prompt, model, timeout)
-        elapsed = time.monotonic() - t0
+            prompt = assemble_prompt(skill_name, skill_content, state, task_context)
+            if index_lock.exists():
+                log.info("GIT_LOCK: removed stale index.lock")
+                index_lock.unlink(missing_ok=True)
+            head_before = _git_head(instance_dir)
+            t0 = time.monotonic()
+            if driver.name == "opencode" and drivers is None:
+                exit_code = _invoke(instance_dir, prompt, model, timeout)
+            else:
+                exit_code = _invoke_driver(instance_dir, prompt, driver, timeout)
+            elapsed = time.monotonic() - t0
+            last_exit_code = exit_code
 
-        log.info("END: %s (exit %d, %.0fs)", skill_name, exit_code, elapsed)
+            log.info("END: %s (exit %d, %.0fs)", label, exit_code, elapsed)
 
-        head_after = _git_head(instance_dir)
-        if head_before and head_after and head_before != head_after:
-            for subj in _commit_subjects(instance_dir, head_before):
-                log.info("COMMIT: %s", subj)
-        elif exit_code == 0:
-            log.info("RESULT: no commits")
-        return exit_code
+            head_after = _git_head(instance_dir)
+            if head_before and head_after and head_before != head_after:
+                for subj in _commit_subjects(instance_dir, head_before):
+                    log.info("COMMIT: %s", subj)
+            elif exit_code == 0:
+                log.info("RESULT: no commits")
+
+        rearm_trigger = has_ready_work(load_state(instance_dir))
+        return last_exit_code
     finally:
         lock.release()
-        index_lock = instance_dir / ".git" / "index.lock"
         if index_lock.exists():
             log.info("GIT_LOCK: removed stale index.lock")
             index_lock.unlink(missing_ok=True)
-        (hitch_dir / "trigger").write_text("")
+        if rearm_trigger:
+            (hitch_dir / "trigger").write_text("")
+        else:
+            (hitch_dir / "trigger").unlink(missing_ok=True)
 
 
 def main() -> None:
@@ -359,10 +434,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Maton hitch runner")
     parser.add_argument("--instance-dir", required=True, type=Path, help="path to the maton instance")
     parser.add_argument("--hitch-dir", required=True, type=Path, help="path to the hitch directory")
-    parser.add_argument("--model", required=True, help="LLM model identifier")
+    parser.add_argument("--model", default="", help="LLM model identifier for the default OpenCode driver")
+    parser.add_argument("--driver", action="append", default=None, help="driver spec, e.g. opencode:model or codex")
     parser.add_argument("--timeout", type=int, default=300, help="max seconds per dispatch (default: 300)")
     parser.add_argument("--log-file", type=Path, default=None, help="log file path (default: hitch_dir/runner.log)")
     args = parser.parse_args()
+    drivers = [parse_driver(raw) for raw in args.driver] if args.driver else None
+    if drivers is None and not args.model:
+        parser.error("--model is required unless --driver is provided")
 
     import setproctitle
 
@@ -374,7 +453,7 @@ def main() -> None:
         level=logging.INFO,
     )
 
-    sys.exit(run(args.instance_dir, args.hitch_dir, args.model, args.timeout))
+    sys.exit(run(args.instance_dir, args.hitch_dir, args.model, args.timeout, drivers))
 
 
 if __name__ == "__main__":
