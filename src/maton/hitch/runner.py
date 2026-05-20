@@ -28,6 +28,18 @@ _STATE_FILES = {
 _FREQ_SECONDS = {"hourly": 3600, "daily": 86400, "weekly": 604800}
 
 
+def _load_hitch_config(hitch_dir: Path) -> dict[str, Any]:
+    """Load hitch runtime config from hitch/config.yaml if present."""
+    config_path = hitch_dir / "config.yaml"
+    if not config_path.exists():
+        return {}
+    try:
+        return yaml.safe_load(config_path.read_text()) or {}
+    except yaml.YAMLError:
+        log.warning("Invalid hitch config at %s; falling back to CLI args", config_path)
+        return {}
+
+
 @dataclass(frozen=True)
 class DriverSpec:
     """A non-interactive agent driver the hitch can invoke."""
@@ -437,8 +449,24 @@ def main() -> None:
     parser.add_argument("--log-file", type=Path, default=None, help="log file path (default: hitch_dir/runner.log)")
     args = parser.parse_args()
     drivers = [parse_driver(raw) for raw in args.driver] if args.driver else None
-    if drivers is None and not args.model:
-        parser.error("--model is required unless --driver is provided")
+
+    runtime_config = _load_hitch_config(args.hitch_dir)
+    config_drivers = runtime_config.get("drivers") or []
+    config_model = str(runtime_config.get("model") or "")
+
+    if drivers is None and config_drivers:
+        specs: list[DriverSpec] = []
+        for item in config_drivers:
+            name = item.get("name") or item.get("type")
+            if not name:
+                continue
+            specs.append(DriverSpec(str(name), item.get("model")))
+        drivers = specs or None
+
+    model = args.model or config_model
+
+    if drivers is None and not model:
+        parser.error("Provide --driver/--model or set model/drivers in hitch/config.yaml")
 
     import setproctitle
 
@@ -450,7 +478,7 @@ def main() -> None:
         level=logging.INFO,
     )
 
-    sys.exit(run(args.instance_dir, args.hitch_dir, args.model, args.timeout, drivers))
+    sys.exit(run(args.instance_dir, args.hitch_dir, model, args.timeout, drivers))
 
 
 if __name__ == "__main__":

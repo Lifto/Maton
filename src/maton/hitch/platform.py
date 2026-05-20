@@ -47,11 +47,8 @@ def _hitch_binary() -> str:
 def _launchd_plist(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) -> str:
     label = _service_name(instance_dir)
     binary = _hitch_binary()
-    model = config.get("model", "")
     timeout = config.get("timeout", 300)
     trigger_path = str(hitch_dir / "trigger")
-    model_args = _model_args(model)
-    driver_args = _driver_args(config)
 
     return textwrap.dedent(f"""\
         <?xml version="1.0" encoding="UTF-8"?>
@@ -68,8 +65,6 @@ def _launchd_plist(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) 
                 <string>{instance_dir}</string>
                 <string>--hitch-dir</string>
                 <string>{hitch_dir}</string>
-{model_args}
-{driver_args}
                 <string>--timeout</string>
                 <string>{timeout}</string>
             </array>
@@ -93,13 +88,6 @@ def _launchd_plist(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) 
     """)
 
 
-def _model_args(model: str) -> str:
-    """Return launchd XML arguments for the legacy model option."""
-    if not model:
-        return ""
-    return f"                <string>--model</string>\n                <string>{model}</string>"
-
-
 def _driver_spec(driver: dict[str, Any]) -> str:
     """Return a CLI driver spec from hitch config."""
     name = driver.get("name") or driver.get("type")
@@ -108,27 +96,6 @@ def _driver_spec(driver: dict[str, Any]) -> str:
         raise ValueError(msg)
     model = driver.get("model")
     return f"{name}:{model}" if model else str(name)
-
-
-def _driver_args(config: dict[str, Any]) -> str:
-    """Return launchd XML arguments for configured drivers."""
-    drivers = config.get("drivers") or []
-    if not drivers:
-        return ""
-    lines: list[str] = []
-    for driver in drivers:
-        spec = _driver_spec(driver)
-        lines.append("                <string>--driver</string>")
-        lines.append(f"                <string>{spec}</string>")
-    return "\n".join(lines)
-
-
-def _systemd_driver_args(config: dict[str, Any]) -> str:
-    """Return systemd command-line arguments for configured drivers."""
-    drivers = config.get("drivers") or []
-    if not drivers:
-        return ""
-    return " ".join(f"--driver {_driver_spec(driver)}" for driver in drivers)
 
 
 def _launchd_plist_path(instance_dir: Path) -> Path:
@@ -196,11 +163,7 @@ def uninstall_launchd(instance_dir: Path, hitch_dir: Path) -> bool:
 
 def _systemd_unit(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) -> str:
     binary = _hitch_binary()
-    model = config.get("model", "")
     timeout = config.get("timeout", 300)
-    model_line = f" \\\n            --model {model}" if model else ""
-    driver_args = _systemd_driver_args(config)
-    driver_line = f" \\\n            {driver_args}" if driver_args else ""
 
     return textwrap.dedent(f"""\
         [Unit]
@@ -210,7 +173,7 @@ def _systemd_unit(instance_dir: Path, hitch_dir: Path, config: dict[str, Any]) -
         Type=oneshot
         ExecStart={binary} \\
             --instance-dir {instance_dir} \\
-            --hitch-dir {hitch_dir}{model_line}{driver_line} \\
+            --hitch-dir {hitch_dir} \\
             --timeout {timeout}
 
         [Install]

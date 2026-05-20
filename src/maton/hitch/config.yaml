@@ -1,0 +1,6 @@
+model: ""
+drivers:
+  - name: opencode
+    model: ""
+  - name: codex
+timeout: 300

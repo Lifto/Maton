@@ -50,14 +50,13 @@ def test_load_config_raises_on_missing(tmp_path: Path) -> None:
 
 
 def test_launchd_plist_contains_key_fields(tmp_path: Path) -> None:
-    """Generated plist contains the label, model, and instance path."""
+    """Generated plist contains the label and instance path."""
     instance = tmp_path / "maton-test"
     instance.mkdir()
     hitch = _make_hitch(tmp_path, model="drone/Qwen3")
     config = _load_config(hitch)
     plist = _launchd_plist(instance, hitch, config)
     assert "com.maton.maton-test" in plist
-    assert "drone/Qwen3" in plist
     assert str(instance) in plist
     assert "WatchPaths" in plist
 
@@ -72,13 +71,12 @@ def test_launchd_plist_path_is_in_launch_agents(tmp_path: Path) -> None:
 
 
 def test_systemd_unit_contains_key_fields(tmp_path: Path) -> None:
-    """Generated systemd unit contains instance path and model."""
+    """Generated systemd unit contains instance path and timeout."""
     instance = tmp_path / "maton-test"
     instance.mkdir()
     hitch = _make_hitch(tmp_path, model="drone/Qwen3", timeout=600)
     config = _load_config(hitch)
     unit = _systemd_unit(instance, hitch, config)
-    assert "drone/Qwen3" in unit
     assert str(instance) in unit
     assert "600" in unit
 
